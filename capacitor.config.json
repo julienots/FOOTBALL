@@ -1,0 +1,12 @@
+{
+  "appId": "com.sporttv.ia",
+  "appName": "Sport TV IA",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "StatusBar": { "overlaysWebView": true, "style": "DARK", "backgroundColor": "#00000000" }
+  }
+}
