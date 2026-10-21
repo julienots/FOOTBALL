@@ -11,6 +11,7 @@ import { InfoChannel } from './channels/info.js';
 import { initAudio, zap, setMasterVolume, sting } from './audio/audio.js';
 import { voice } from './audio/voice.js';
 import { BetCenter } from './bet/bets.js';
+import { neural } from './tts/neural.js';
 
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const params = new URLSearchParams(location.search);
@@ -209,6 +210,7 @@ class App {
     if (this.on) return;
     this.on = true;
     initAudio();
+    if (this.settings.voices !== 'phone') neural.init();
     setMasterVolume(this.settings.volume);
     voice.setEnabled(this.settings.commentary);
     this.splash.classList.add('off');
@@ -350,6 +352,8 @@ class App {
       <div class="st-note">En temps réel, un match dure 90 minutes comme à la télé. La grille des programmes s'adapte.</div></div>
       <div class="st-grp"><div class="st-lbl">Qualité graphique</div>${opt('quality', 'low', 'Économie', s.quality)}${opt('quality', 'medium', 'Standard', s.quality)}${opt('quality', 'high', 'Ultra', s.quality)}</div>
       <div class="st-grp"><div class="st-lbl">Commentateurs</div>${opt('commentary', true, 'Activés', s.commentary)}${opt('commentary', false, 'Coupés', s.commentary)}</div>
+      <div class="st-grp"><div class="st-lbl">Voix des commentateurs</div>${opt('voices', 'ia', 'Réalistes (IA)', s.voices || 'ia')}${opt('voices', 'phone', 'Voix du téléphone', s.voices || 'ia')}
+      <div class="st-note">Les voix réalistes sont générées dans l'appli par un réseau de neurones (deux voix d'hommes différentes).</div></div>
       <div class="st-grp"><div class="st-lbl">Volume</div>${[0.3, 0.6, 0.9, 1.2].map(v => opt('volume', v, Math.round(v * 100) + ' %', s.volume)).join('')}</div>`;
     this.hubBody.querySelectorAll('.st-opt').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.k;
@@ -360,7 +364,7 @@ class App {
       this.save();
       if (k === 'volume') setMasterVolume(v);
       if (k === 'commentary') voice.setEnabled(v);
-      if (k === 'speed' || k === 'quality') { location.reload(); return; }
+      if (k === 'speed' || k === 'quality' || k === 'voices') { location.reload(); return; }
       this.renderSettings();
     }));
   }
@@ -399,3 +403,4 @@ class App {
 }
 
 window.app = new App();
+window.__neural = neural;

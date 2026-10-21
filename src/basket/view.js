@@ -180,7 +180,7 @@ export class BasketView {
         const d = p.d;
         this.players.setMeta(idx, {
           shirt: kit.shirt, shorts: kit.shirt, socks: '#ffffff', skin: d.look.skin, hair: d.look.hairColor, hairStyle: d.look.hairStyle,
-          height: d.height, number: d.number, numColor: kit.num, gloves: null, boot: '#f5f5f5',
+          height: d.height, number: d.number, numColor: kit.num, gloves: null, boot: '#f5f5f5', tank: true,
         });
         // débardeur : bras nus
         const skin = this.players.meshes.forearm.getColorAt(idx * 2, new THREE.Color());

@@ -7,3 +7,5 @@ android/local.properties
 android/app/src/main/assets/public/
 *.apk
 .DS_Store
+public/voices/*.onnx*
+dev/

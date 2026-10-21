@@ -22,6 +22,17 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Download realistic voices (Piper)
+        run: |
+          HF=https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR
+          mkdir -p public/voices
+          for v in gilles/low/fr_FR-gilles-low tom/medium/fr_FR-tom-medium; do
+            f=$(basename $v)
+            curl -fL --retry 4 -o public/voices/$f.onnx $HF/$v.onnx
+            curl -fL --retry 4 -o public/voices/$f.onnx.json $HF/$v.onnx.json
+          done
+          ls -la public/voices
+
       - name: Build web app
         run: npm run build
 

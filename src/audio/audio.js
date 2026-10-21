@@ -23,13 +23,14 @@ export function initAudio() {
   const revGain = ctx.createGain(); revGain.gain.value = 0.35;
   reverb.connect(revGain).connect(master);
   buses.reverb = reverb;
-  for (const name of ['stadium', 'ads', 'fx']) {
+  for (const name of ['stadium', 'ads', 'fx', 'voice']) {
     const g = ctx.createGain(); g.gain.value = 1; g.connect(master); buses[name] = g;
   }
   return ctx;
 }
 
 export function setMasterVolume(v) { if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.05); }
+export function getBus(name) { return buses[name]; }
 export function busGain(name, v, tc = 0.3) { if (buses[name]) buses[name].gain.setTargetAtTime(v, ctx.currentTime, tc); }
 
 function impulse(sec, decay) {

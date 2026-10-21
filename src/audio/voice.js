@@ -2,6 +2,8 @@
 // Deux commentateurs avec des voix différentes + une voix "pub".
 import { Capacitor } from '@capacitor/core';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
+import { neural } from '../tts/neural.js';
+import { busGain } from './audio.js';
 
 const native = Capacitor.isNativePlatform();
 
@@ -50,8 +52,8 @@ class VoiceEngine {
   pickVoice(spk) {
     const list = native ? this.voices : this.webVoices;
     if (!list.length) return null;
-    const maleHint = /(male|homme|thomas|paul|henri|nicolas|frb|frd|fr-fr-x-frb|fr-fr-x-frd|vlf|daniel|guillaume)/i;
-    const femaleHint = /(female|femme|amelie|amélie|audrey|marie|julie|frc|fra|fr-fr-x-frc|fr-fr-x-fra|virginie|celine|céline)/i;
+    const maleHint = /(^|[^e])male|homme|thomas|paul|henri|nicolas|frb|frd|fr-fr-x-frb|fr-fr-x-frd|daniel|guillaume|smtm|-m\d|#male|_m\d/i;
+    const femaleHint = /female|femme|amelie|amélie|audrey|marie|julie|frc|fra\b|fr-fr-x-frc|fr-fr-x-fra|vlf|virginie|celine|céline|smtf|-f\d|_f\d/i;
     const males = list.filter(v => maleHint.test(v.name || v.voiceURI || ''));
     const females = list.filter(v => femaleHint.test(v.name || v.voiceURI || ''));
     const others = list.filter(v => !males.includes(v) && !females.includes(v));
@@ -70,6 +72,7 @@ class VoiceEngine {
   say(who, text, prio = 1, opts = {}) {
     if (!this.enabled || !text) return;
     const item = { who, text, prio, t: performance.now(), ttl: opts.ttl ?? (prio >= 2 ? 6000 : 15000), channel: opts.channel };
+    this.prepare(item);
     if (prio >= 3) {
       this.queue = this.queue.filter(q => q.prio >= 3);
       this.queue.push(item);
@@ -93,6 +96,7 @@ class VoiceEngine {
   }
 
   interrupt() {
+    try { if (this.src) { this.src.stop(); this.src = null; } } catch (e) { /* déjà fini */ }
     try {
       if (native) TextToSpeech.stop();
       else if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -100,6 +104,29 @@ class VoiceEngine {
     this.seq = (this.seq || 0) + 1;
     this.speaking = false;
     this.current = null;
+  }
+
+  // Lance la synthèse neuronale dès la mise en file (l'audio est prêt plus vite)
+  prepare(item) {
+    const id = item.who === 'cons' || item.who === 'anchor' ? 'cons' : 'pbp';
+    if (!neural.has(id) || item.who === 'anchor') return;
+    const excited = item.prio >= 3;
+    const style = item.who === 'cons'
+      ? { length: 1.0, noise: 0.72, rate: 0.98, gain: 1 }
+      : item.who === 'ad' ? { length: 0.86, noise: 0.75, rate: 1.04, gain: 1 }
+      : excited ? { length: 0.8, noise: 0.85, noiseW: 0.9, rate: 1.07, gain: 1.35 }
+      : { length: 0.9, noise: 0.75, rate: 1.02, gain: 1.05 };
+    const segs = [];
+    let text = item.text;
+    // le fameux "BUUUUT !" étiré
+    const m = text.match(/^(BU+T|GO+AL|IL MARQUE)\s*!?\s*/i);
+    if (m && excited) {
+      segs.push({ text: /BU/i.test(m[1]) ? 'But !' : m[1].toLowerCase() + ' !', length: 2.6 + Math.random() * 0.6, noise: 0.9, rate: 1.1, gain: 1.5 });
+      text = text.slice(m[0].length);
+    }
+    if (text.trim()) segs.push({ text: text.replace(/[A-ZÉÈÀ]{3,}/g, w => w[0] + w.slice(1).toLowerCase()), ...style });
+    item.audio = Promise.all(segs.map(sg => neural.synth(id, sg.text, sg).then(buf => ({ buf, rate: sg.rate, gain: sg.gain }))));
+    item.audio.catch(() => { item.audio = null; });
   }
 
   async pump() {
@@ -119,7 +146,21 @@ class VoiceEngine {
     const rate = spk.rate * (excited ? 1.12 : 1);
     const pitch = spk.pitch * (excited ? 1.08 : 1);
     try {
-      if (native) {
+      if (item.audio) {
+        // voix neuronale réaliste
+        const parts = await item.audio;
+        if (my !== this.seq) return;
+        if (performance.now() - item.t > item.ttl + 2500) throw new Error('trop tard');
+        busGain('stadium', 0.62, 0.15);
+        for (const p of parts) {
+          if (my !== this.seq) return;
+          const pl = neural.play(p.buf, { rate: p.rate, gain: p.gain * this.volume });
+          this.src = pl.src;
+          await pl.done;
+        }
+        this.src = null;
+        if (this.queue.length === 0) busGain('stadium', 1, 0.4);
+      } else if (native) {
         await TextToSpeech.speak({ text: item.text, lang: 'fr-FR', rate, pitch, volume: this.volume, voice: voice ? voice.index : undefined, category: 'playback', queueStrategy: 0 });
       } else if ('speechSynthesis' in window) {
         await new Promise((resolve) => {
