@@ -48,7 +48,7 @@ function grassTexture(rng) {
 }
 
 function lineGeometry() {
-  const W = 0.12;
+  const W = 0.14;
   const parts = [];
   const rect = (x0, z0, x1, z1) => {
     const g = new THREE.PlaneGeometry(Math.abs(x1 - x0) || W, Math.abs(z1 - z0) || W);

@@ -28,7 +28,7 @@ class App {
     this.world = getWorld();
     this.canvas = document.getElementById('gl');
     this.tvRoot = document.getElementById('tv');
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: this.settings.quality !== 'low', powerPreference: 'high-performance' });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.settings.quality === 'high' ? 1.75 : this.settings.quality === 'medium' ? 1.25 : 1));
     this.renderer.shadowMap.enabled = this.settings.quality !== 'low';
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
