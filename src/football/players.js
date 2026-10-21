@@ -87,7 +87,7 @@ export class Players {
     this.scene = scene;
     const std = (opts = {}) => new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0, ...opts });
     const parts = {
-      shorts: [new THREE.CylinderGeometry(0.17, 0.19, 0.3, 10).translate(0, -0.1, 0), 1],
+      shorts: [new THREE.CylinderGeometry(0.155, 0.17, 0.27, 12).scale(1, 1, 0.8).translate(0, -0.09, 0), 1],
       torso: [capsule(0.16, 0.36, 10).translate(0, 0.62, 0).scale(1.18, 1, 0.78), 1],
       head: [new THREE.SphereGeometry(0.115, 14, 12).scale(0.92, 1.08, 1).translate(0, 0.1, 0), 1],
       hair: [new THREE.SphereGeometry(0.122, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55).translate(0, 0.11, -0.008), 1],

@@ -92,9 +92,12 @@ export class FootballView {
     if (!clip || !clip.frames.length) return;
     const n = clip.frames.length;
     const end = n - 1;
-    const angles = opts.short ? [{ from: Math.max(0, end - 150), to: end, speed: 0.75, cam: 'goal' }]
-      : [{ from: Math.max(0, end - 170), to: end, speed: 0.6, cam: 'goal' }, { from: Math.max(0, end - 85), to: end - 10, speed: 0.38, cam: 'low' }];
-    this.replay = { clip, angles, ai: 0, f: angles[0].from, done: false, onEnd: opts.onEnd };
+    if (clip.info && clip.info.pen) opts.short = true;
+    const angles = opts.short ? [{ from: Math.max(0, end - (clip.info && clip.info.pen ? 80 : 150)), to: end, speed: 0.75, cam: 'goal' }]
+      : [{ from: Math.max(0, end - 150), to: end - 15, speed: 0.6, cam: 'goal' }, { from: Math.max(0, end - 95), to: end - 35, speed: 0.38, cam: 'low' }];
+    const last = clip.frames[Math.max(0, n - 51)];
+    const side = Math.sign(last[25 * ENT] || 1);
+    this.replay = { clip, angles, ai: 0, f: angles[0].from, done: false, onEnd: opts.onEnd, side };
     this.mode = 'replay';
   }
 
@@ -221,7 +224,7 @@ export class FootballView {
     const mode = replaying ? 'replay' : (st.camMode || this.mode);
     if (mode === 'replay') {
       const ang = this.replay.angles[this.replay.ai];
-      const side = Math.sign(bx || 1);
+      const side = this.replay.side;
       if (ang.cam === 'goal') { pos.set(side * (HL + 17), 7.5, bz * 0.35 + 6); look.set(bx * 0.7 + side * HL * 0.3, 0.8, bz * 0.8); fov = 34; }
       else { pos.set(bx - side * 12, 1.7, bz + (bz > 0 ? 10 : -10)); look.set(bx, 1.0, bz); fov = 30; }
       k = 6;
