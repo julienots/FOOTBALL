@@ -373,3 +373,26 @@ function drumHit(dest, t, kind) {
     n.connect(f).connect(g).connect(dest); n.start(t, Math.random() * 3, 0.2);
   }
 }
+
+// Effets du jeu télévisé : buzzer, bonne/mauvaise réponse, tic-tac, jackpot
+export function showSfx(kind) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const tone = (f, t0, d, type = 'square', vol = 0.08, f2) => {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + d);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.01); g.gain.setValueAtTime(vol, t0 + d * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.connect(g).connect(buses.fx); g.connect(buses.reverb); o.start(t0); o.stop(t0 + d + 0.05);
+  };
+  if (kind === 'buzz') { tone(587, t, 0.35, 'square', 0.07); tone(880, t, 0.35, 'square', 0.05); }
+  else if (kind === 'good') [72, 76, 79, 84].forEach((m, i) => tone(440 * Math.pow(2, (m - 69) / 12), t + i * 0.08, 0.5, 'triangle', 0.1));
+  else if (kind === 'bad') { tone(196, t, 0.7, 'sawtooth', 0.06, 150); tone(185, t, 0.7, 'square', 0.04, 140); }
+  else if (kind === 'tick') tone(1800, t, 0.03, 'square', 0.03);
+  else if (kind === 'reveal') [60, 67, 72].forEach((m, i) => tone(440 * Math.pow(2, (m - 69) / 12), t + i * 0.05, 0.9, 'sine', 0.07));
+  else if (kind === 'jackpot') for (let i = 0; i < 12; i++) tone(440 * Math.pow(2, ([72, 76, 79, 84][i % 4] + 12 * Math.floor(i / 4) * 0.5 - 69) / 12), t + i * 0.07, 0.4, 'triangle', 0.07);
+  else if (kind === 'whoosh') {
+    const n = ctx.createBufferSource(); n.buffer = noise();
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(3000, t + 0.4); f.Q.value = 2;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.12, t + 0.2); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    n.connect(f).connect(g).connect(buses.fx); n.start(t, 0, 0.6);
+  }
+}

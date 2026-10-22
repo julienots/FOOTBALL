@@ -11,6 +11,7 @@ import { InfoChannel } from './channels/info.js';
 import { Foot2Channel } from './channels/foot2.js';
 import { TennisChannel } from './channels/tennis.js';
 import { RacingChannel } from './channels/racing.js';
+import { GeneralChannel } from './channels/general.js';
 import { initAudio, zap, setMasterVolume, sting } from './audio/audio.js';
 import { voice } from './audio/voice.js';
 import { BetCenter } from './bet/bets.js';
@@ -49,6 +50,7 @@ class App {
     this.channels = [new FootChannel(this), new BasketChannel(this), new InfoChannel(this)];
     this.channels.splice(1, 0, new Foot2Channel(this, 2));
     this.channels.splice(3, 0, new TennisChannel(this, 4), new RacingChannel(this, 5));
+    this.channels.push(new GeneralChannel(this, 7));
     this.channels.forEach((c, i) => (c.num = i + 1));
     this.current = null;
     this.views = new Set();

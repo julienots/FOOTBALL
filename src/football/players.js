@@ -208,7 +208,7 @@ const PARTS = [
   ['beard', ['head'], 'hair', m => !!m.beard],
   ['eye', ['eyeL', 'eyeR'], 'sclera'], ['pupil', ['eyeL', 'eyeR'], 'eye'], ['mouth', ['head'], 'lip'], ['brow', ['eyeL', 'eyeR'], 'hair'], ['ear', ['earL', 'earR'], 'skin'],
   ['sleeve', ['uaL', 'uaR'], 'shirt'], ['upperArm', ['uaL', 'uaR'], 'arm'], ['forearm', ['faL', 'faR'], 'arm'], ['hand', ['hdL', 'hdR'], 'hand'],
-  ['shortsTop', ['pelvis'], 'shorts'], ['shortLeg', ['slL', 'slR'], 'shorts'], ['thigh', ['thL', 'thR'], 'skin'],
+  ['shortsTop', ['pelvis'], 'shorts'], ['shortLeg', ['slL', 'slR'], 'shorts'], ['thigh', ['thL', 'thR'], 'leg'],
   ['shin', ['shL', 'shR'], 'socks'], ['boot', ['ftL', 'ftR'], 'boot'], ['num', ['num'], 'num'], ['numF', ['numF'], 'num', m => !m.official],
   ['sponsor', ['sponsor'], 'sponsorCol', m => m.sponsor >= 0 && !m.official], ['badge', ['badge'], 'badgeCol', m => !m.official],
 ];
@@ -294,8 +294,11 @@ export class Players {
               else if (vPat < 4.5 && vPat > 3.5) pm = step(abs(fx * 2.4 - (v - 0.5)), 0.1) * step(abs(fx), 0.27);
               else if (vPat < 5.5 && vPat > 4.5) pm = step(0.86, fract(u * 26.0));
               else if (vPat < 6.5 && vPat > 5.5) pm = step(abs(abs(fx) * 1.7 - (0.86 - v)), 0.06) * step(abs(fx), 0.3);
+              float tie = 0.0;
+              if (vPat > 6.5) { pm = step(abs(fx), (v - 0.5) * 0.36) * step(0.5, v); tie = pm * step(abs(fx), 0.016 + step(0.86, v) * 0.006) * step(v, 0.93); }
               #ifdef USE_MAP
               diffuseColor.rgb = mix(diffuseColor.rgb, vCol2 * sampledDiffuseColor.rgb, pm);
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.38, 0.05, 0.08) * sampledDiffuseColor.rgb, tie);
               #endif`);
         };
         if (k === 'torso') {
@@ -303,7 +306,7 @@ export class Players {
           geo.setAttribute('aPat', new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
         }
       } else {
-        const skinLike = col === 'skin' || col === 'arm' || col === 'hand' || col === 'face';
+        const skinLike = col === 'skin' || col === 'arm' || col === 'hand' || col === 'face' || col === 'leg';
         const map = col === 'face' ? tex.face : skinLike ? tex.skin : col === 'hair' ? tex.hair : col === 'boot' ? tex.boot : null;
         mat = new THREE.MeshStandardMaterial({
           map, normalMap: skinLike && hi ? pores : null, normalScale: new THREE.Vector2(0.12, 0.12),
@@ -347,7 +350,7 @@ export class Players {
     const colors = {
       shirt: meta.shirt, shorts: meta.shorts, socks: meta.socks, skin, face: skin, hair: meta.hair, eye: '#1d140e', sclera: '#efe9e2',
       trim: meta.trim || meta.shorts, lip: skin.clone().multiplyScalar(0.62), boot: meta.boot || '#111111', num: meta.numColor || '#ffffff',
-      arm: meta.gloves ? meta.shirt : skin, hand: meta.gloves || skin, shadow: '#000000',
+      arm: meta.gloves || meta.longSleeves ? meta.shirt : skin, hand: meta.gloves || skin, shadow: '#000000', leg: meta.trousers ? meta.shorts : skin,
       sponsorCol: meta.sponsorColor || (lum(meta.shirt) > 0.55 ? '#1a1a1a' : '#ffffff'), badgeCol: meta.badgeColor || '#d4af37',
     };
     for (const [k, nodes, col] of PARTS) {
