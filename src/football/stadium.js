@@ -18,12 +18,30 @@ export function canvasTex(w, h, draw, opts = {}) {
   return t;
 }
 
+function grassNormal(rng) {
+  const S = 256;
+  const hgt = new Float32Array(S * S);
+  for (let i = 0; i < S * S; i++) hgt[i] = rng.next();
+  // brins d'herbe : bruit étiré
+  for (let k = 0; k < 2; k++) for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) hgt[y * S + x] = (hgt[y * S + x] + hgt[((y + 1) % S) * S + x]) * 0.5;
+  return canvasTex(S, S, (g) => {
+    const img = g.createImageData(S, S);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const dx = hgt[y * S + ((x + 1) % S)] - hgt[y * S + ((x + S - 1) % S)];
+      const dy = hgt[((y + 1) % S) * S + x] - hgt[((y + S - 1) % S) * S + x];
+      const i = (y * S + x) * 4;
+      img.data[i] = 128 - dx * 200; img.data[i + 1] = 128 - dy * 200; img.data[i + 2] = 255; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }, { linear: true, repeat: [70, 45], aniso: 8 });
+}
+
 function grassTexture(rng) {
   return canvasTex(2048, 1024, (g, w, h) => {
     // bandes de tonte
     const stripes = 18;
     for (let i = 0; i < stripes; i++) {
-      g.fillStyle = i % 2 ? '#2d6a20' : '#377a29';
+      g.fillStyle = i % 2 ? '#2b5b22' : '#36682b';
       g.fillRect((i * w) / stripes, 0, w / stripes + 1, h);
     }
     // bandes transversales légères (damier)
@@ -193,6 +211,15 @@ function bowlPath(D, n, ax = HL + 2, bz = HW + 2) {
   return { pts, per };
 }
 
+// Escaliers d'accès entre les blocs de sièges
+export function isAisle(p) {
+  const m = (v, step, w) => { const a = ((Math.abs(v) % step) + step) % step; return a < w || a > step - w; };
+  if (Math.abs(p.nz) > 0.97) return m(p.x, 13, 0.55);
+  if (Math.abs(p.nx) > 0.97) return m(p.z, 11, 0.55);
+  const ang = Math.atan2(p.nz, p.nx) * 180 / Math.PI;
+  return m(ang, 18, 1.4);
+}
+
 // Tribune en gradins (géométrie unique)
 function tierGeometry(D0, rows, depth, rise, h0, segs, colorFn) {
   const pos = [], col = [], idx = [];
@@ -274,13 +301,13 @@ export class Stadium {
     G.add(ground);
     // pelouse
     const grass = grassTexture(this.rng);
-    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(HL * 2 + 14, HW * 2 + 14), new THREE.MeshStandardMaterial({ map: grass, roughness: 0.92, metalness: 0 }));
+    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(HL * 2 + 14, HW * 2 + 14), new THREE.MeshStandardMaterial({ map: grass, roughness: 0.88, metalness: 0, normalMap: quality === 'low' ? null : grassNormal(this.rng), normalScale: new THREE.Vector2(0.55, 0.55) }));
     pitch.rotation.x = -Math.PI / 2; pitch.receiveShadow = true;
     G.add(pitch);
     // piste autour (zone technique)
     const apron = new THREE.Mesh(new THREE.RingGeometry(1, 2, 4), new THREE.MeshStandardMaterial({ color: 0x3d7a2c }));
     apron.visible = false;
-    const lines = new THREE.Mesh(lineGeometry(), new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.8, emissive: 0x333333 }));
+    const lines = new THREE.Mesh(lineGeometry(), new THREE.MeshStandardMaterial({ color: 0xe9ece6, roughness: 0.85 }));
     lines.receiveShadow = true;
     G.add(lines);
     // buts
@@ -329,6 +356,7 @@ export class Stadium {
     const segs = quality === 'low' ? 140 : 220;
     const hc = new THREE.Color(homeColor), ac = new THREE.Color(awayColor), grey = new THREE.Color(0x5a5f66);
     const seatColor = (c, r, u, p) => {
+      if (isAisle(p)) { c.setRGB(0.62, 0.63, 0.65); return; }
       // sièges aux couleurs du club, secteur visiteur dans un virage
       const away = p.x < -HL - 4 && p.z < -10;
       const stripe = Math.floor(u * 64) % 6 === 0;
@@ -345,7 +373,13 @@ export class Stadium {
     }
     // mur d'enceinte bas + bande VIP vitrée
     const bandPts = bowlPath(29, segs).pts;
-    const band = this.wallStrip(bandPts, 11.0, 14.0, new THREE.MeshStandardMaterial({ color: 0x0b1a2a, emissive: night ? 0x1d3a5a : 0x0a1520, roughness: 0.15, metalness: 0.6 }));
+    const band = this.wallStrip(bandPts, 12.2, 14.0, new THREE.MeshStandardMaterial({ color: 0x0b1a2a, emissive: night ? 0x1d3a5a : 0x0a1520, roughness: 0.08, metalness: 0.8 }));
+    // ruban LED entre les deux anneaux de tribunes
+    this.ribbonTex = adBoardTexture(2);
+    this.ribbonTex.repeat.set(9, 1);
+    const ribbon = this.wallStrip(bowlPath(28.6, segs).pts, 11.0, 12.2, new THREE.MeshBasicMaterial({ map: this.ribbonTex, toneMapped: false }), true);
+    G.add(ribbon);
+    this.adTex.push(this.ribbonTex);
     G.add(band);
     const fascia = this.wallStrip(bowlPath(8, segs).pts, 0, 0.9, new THREE.MeshStandardMaterial({ color: 0x222831 }));
     G.add(fascia);
@@ -377,6 +411,42 @@ export class Stadium {
       const lp = bowlPath(25, 60).pts;
       for (const p of lp) { const s = new THREE.Sprite(sm); s.position.set(p.x, roofY0 - 0.7, p.z); s.scale.set(6, 6, 1); G.add(s); }
     }
+    // charpente métallique sous le toit
+    const trussMat = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, metalness: 0.6, roughness: 0.45 });
+    const beam = (a, b, r = 0.18) => {
+      const dir = new THREE.Vector3().subVectors(b, a); const len = dir.length();
+      const m = new THREE.Matrix4().compose(a.clone().addScaledVector(dir, 0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()), new THREE.Vector3(r, len, r));
+      return m;
+    };
+    const trussM = [];
+    const tin = bowlPath(24.5, 48).pts, tout = bowlPath(51, 48).pts;
+    for (let i = 0; i < 48; i++) {
+      const a = new THREE.Vector3(tin[i].x, roofY0 - 0.3, tin[i].z), b = new THREE.Vector3(tout[i].x, roofY1 - 0.3, tout[i].z);
+      const a2 = a.clone(); a2.y -= 2.4; const b2 = b.clone(); b2.y -= 4;
+      trussM.push(beam(a, b), beam(a2, b2, 0.14), beam(a, a2, 0.1), beam(b, b2, 0.1));
+      const mid = a.clone().lerp(b, 0.5), mid2 = a2.clone().lerp(b2, 0.5);
+      trussM.push(beam(a, mid2, 0.08), beam(mid2, b, 0.08), beam(mid, mid2, 0.08));
+    }
+    for (const D of [27, 38, 49]) {
+      const ring = bowlPath(D, 96).pts;
+      const y = roofY0 + (D - 24) / 28 * (roofY1 - roofY0) - 2.6;
+      for (let i = 0; i < 96; i++) { const j = (i + 1) % 96; trussM.push(beam(new THREE.Vector3(ring[i].x, y, ring[i].z), new THREE.Vector3(ring[j].x, y, ring[j].z), 0.1)); }
+    }
+    const truss = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6), trussMat, trussM.length);
+    trussM.forEach((m, i) => truss.setMatrixAt(i, m));
+    G.add(truss);
+    if (night) {
+      // faisceaux des projecteurs dans l'air (légère brume)
+      const fade = canvasTex(4, 128, (g, w, h) => { const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, '#fff'); grd.addColorStop(0.6, '#333'); grd.addColorStop(1, '#000'); g.fillStyle = grd; g.fillRect(0, 0, w, h); }, { linear: true });
+      const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff6e0, transparent: true, opacity: 0.05, alphaMap: fade, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const cone = new THREE.ConeGeometry(6, 34, 24, 1, true); cone.translate(0, -17, 0);
+      for (const p of bowlPath(25, 20).pts) {
+        const m = new THREE.Mesh(cone, beamMat);
+        m.position.set(p.x, roofY0 - 0.7, p.z);
+        m.lookAt(p.x * 0.35, 0, p.z * 0.35); m.rotateX(-Math.PI / 2);
+        G.add(m);
+      }
+    }
     // piliers du toit
     const pillarMat = new THREE.MeshStandardMaterial({ color: 0xbfc5cc, metalness: 0.4, roughness: 0.5 });
     for (const p of bowlPath(50, 24).pts) {
@@ -394,13 +464,14 @@ export class Stadium {
     this.bowlPath = bowlPath;
   }
 
-  wallStrip(pts, y0, y1, mat) {
-    const p = [], idx = [];
+  wallStrip(pts, y0, y1, mat, withUv = false) {
+    const p = [], idx = [], uv = [];
     const n = pts.length;
-    for (let i = 0; i < n; i++) p.push(pts[i].x, y0, pts[i].z, pts[i].x, y1, pts[i].z);
+    for (let i = 0; i < n; i++) { p.push(pts[i].x, y0, pts[i].z, pts[i].x, y1, pts[i].z); uv.push(i / n, 0, i / n, 1); }
     for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(2 * i, 2 * j, 2 * i + 1, 2 * j, 2 * j + 1, 2 * i + 1); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setIndex(idx); g.computeVertexNormals();
+    if (withUv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     const m = new THREE.Mesh(g, mat);
     if (!mat.side || mat.side === THREE.FrontSide) mat.side = THREE.DoubleSide;
     return m;
@@ -416,7 +487,10 @@ export class Stadium {
         const n = Math.floor(per / spacing);
         const { pts } = bowlPath(D, n);
         const y = T.h0 + (r + 1) * T.rise;
-        for (const p of pts) out.push({ x: p.x, y, z: p.z, nx: p.nx, nz: p.nz, row: r, upper: T === this.upper });
+        for (const p of pts) {
+          if (isAisle(p)) continue;
+          out.push({ x: p.x, y, z: p.z, nx: p.nx, nz: p.nz, row: r, upper: T === this.upper });
+        }
       }
     }
     return out;

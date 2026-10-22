@@ -188,7 +188,7 @@ export class BasketView {
         this.players.meshes.sleeve.instanceColor.needsUpdate = true;
       }
     }
-    const ref = { shirt: '#9e9e9e', shorts: '#111111', socks: '#111111', skin: 0.4, hair: '#222', hairStyle: 0, height: 1.82, number: 0, numColor: '#9e9e9e' };
+    const ref = { shirt: '#9e9e9e', shorts: '#111111', socks: '#111111', skin: 0.4, hair: '#222', hairStyle: 0, height: 1.82, number: 0, numColor: '#9e9e9e', official: true, sponsor: -1 };
     for (let i = 0; i < 3; i++) this.players.setMeta(22 + i, { ...ref, skin: [0.2, 0.6, 0.9][i] });
   }
 

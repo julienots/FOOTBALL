@@ -146,6 +146,13 @@ export function getWorld() {
     t.coach = makeCoach(rng, code);
     return t;
   });
+  // maillots : motif et sponsor (graine séparée pour ne pas changer les joueurs)
+  clubs.forEach((t, i) => {
+    const kr = new RNG('kit-' + t.short);
+    t.pattern = kr.weighted([0, 1, 2, 3, 4, 5, 6], p => [5, 2.5, 1.5, 1, 1, 1.2, 0.8][p]);
+    t.sponsor = i % 8;
+  });
+  nations.forEach(t => { const kr = new RNG('kit-' + t.code); t.pattern = kr.chance(0.25) ? kr.pick([5, 6, 1]) : 0; t.sponsor = -1; });
   const teams = {};
   [...clubs, ...nations].forEach(t => (teams[t.id] = t));
   const players = {};

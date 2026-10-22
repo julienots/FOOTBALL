@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { canvasTex } from './stadium.js';
 import { RNG } from '../core/rng.js';
+import { HL, HW } from './engine.js';
 
 // Atlas : 4 poses (assis/debout, bras levés, applaudit, écharpe tendue).
 // Canaux : R = maillot, G = peau, B = pantalon/cheveux, A = opacité
@@ -48,6 +49,15 @@ export class Crowd {
     const seats = stadium.seats(spacing);
     const rng = new RNG('foule');
     const filled = seats.filter(() => rng.chance(attendance));
+    // photographes derrière les buts et stadiers face au public
+    const extras = [];
+    for (const sx of [-1, 1]) for (let i = 0; i < 9; i++) {
+      const z = -15 + i * 3.75 + rng.range(-0.6, 0.6);
+      if (Math.abs(z) < 5) continue;
+      extras.push({ x: sx * (HL + 3.2), y: 0, z, nx: sx, nz: 0, kind: 'photo' });
+    }
+    for (const sz of [-1, 1]) for (let i = -3; i <= 3; i++) extras.push({ x: i * 15 + 4, y: 0, z: sz * (HW + 6.6), nx: 0, nz: -sz, kind: 'steward' });
+    filled.push(...extras);
     const n = filled.length;
     this.count = n;
     const geo = new THREE.PlaneGeometry(0.62, 1.25);
@@ -64,16 +74,18 @@ export class Crowd {
     filled.forEach((s, i) => {
       offs[i * 3] = s.x + (rng.next() - 0.5) * 0.15; offs[i * 3 + 1] = s.y; offs[i * 3 + 2] = s.z + (rng.next() - 0.5) * 0.15;
       rot[i] = Math.atan2(-s.nx, -s.nz);
-      const awaySector = s.x < -56 && s.z < -10;
+      const awaySector = s.x < -56 && s.z < -10 && !s.kind;
       const r = rng.next();
-      if (awaySector) c.copy(r < 0.75 ? ac[0] : r < 0.9 ? ac[1] : rng.pick(neutral));
+      if (s.kind === 'photo') c.set(rng.pick(['#222222', '#2b2b33', '#3a3a3a']));
+      else if (s.kind === 'steward') c.set('#ffd600');
+      else if (awaySector) c.copy(r < 0.75 ? ac[0] : r < 0.9 ? ac[1] : rng.pick(neutral));
       else c.copy(r < 0.55 ? hc[0] : r < 0.72 ? hc[1] : rng.pick(neutral));
       c.offsetHSL(0, 0, (rng.next() - 0.5) * 0.12);
       shirt.set([c.r, c.g, c.b], i * 3);
       c.copy(rng.pick(skins)); skin.set([c.r, c.g, c.b], i * 3);
       // phase, tempérament, secteur (1 = ultras derrière un but), visiteur
-      const ultras = (s.x > 58 && Math.abs(s.z) < 30 && !s.upper) || awaySector;
-      misc.set([rng.next() * 6.283, 0.5 + rng.next() * 0.8, ultras ? 1 : 0, awaySector ? 1 : 0], i * 4);
+      const ultras = !s.kind && ((s.x > 58 && Math.abs(s.z) < 30 && !s.upper) || awaySector);
+      misc.set([rng.next() * 6.283, s.kind ? 0.0 : 0.5 + rng.next() * 0.8, ultras ? 1 : 0, awaySector ? 1 : 0], i * 4);
     });
     ig.setAttribute('iOff', new THREE.InstancedBufferAttribute(offs, 3));
     ig.setAttribute('iRot', new THREE.InstancedBufferAttribute(rot, 1));
@@ -90,8 +102,8 @@ export class Crowd {
       vertexShader: `
         attribute vec3 iOff; attribute float iRot; attribute vec3 iShirt; attribute vec3 iSkin; attribute vec4 iMisc;
         uniform float uTime; uniform float uExc; uniform float uHomeJoy; uniform float uAwayJoy; uniform float uChant;
-        varying vec2 vUv; varying vec3 vShirt; varying vec3 vSkin; varying float vShade;
-        void main(){
+        varying vec2 vUv; varying vec3 vShirt; varying vec3 vSkin; varying float vShade; varying float vY;
+        void main(){ vY = uv.y;
           float ph = iMisc.x; float temp = iMisc.y; float ultras = iMisc.z; float away = iMisc.w;
           float joy = mix(uHomeJoy, uAwayJoy, away);
           float exc = clamp(uExc * temp + ultras * 0.35 + joy, 0.0, 1.5);
@@ -115,11 +127,12 @@ export class Crowd {
         }`,
       fragmentShader: `
         uniform sampler2D uTex; uniform vec3 uLight;
-        varying vec2 vUv; varying vec3 vShirt; varying vec3 vSkin; varying float vShade;
+        varying vec2 vUv; varying vec3 vShirt; varying vec3 vSkin; varying float vShade; varying float vY;
         void main(){
           vec4 t = texture2D(uTex, vUv);
           if (t.a < 0.5) discard;
           vec3 col = vShirt * t.r + vSkin * t.g + vec3(0.08, 0.08, 0.1) * t.b;
+          col *= 0.62 + 0.5 * vY; // éclairage du haut vers le bas
           gl_FragColor = vec4(col * vShade * uLight, 1.0);
           #include <colorspace_fragment>
         }`,
@@ -128,10 +141,61 @@ export class Crowd {
     this.mesh = new THREE.Mesh(ig, mat);
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
+    this.buildFlags(scene, homeColors, awayColors, opts);
+  }
+
+  // Drapeaux qui flottent dans les virages + banderole des ultras
+  buildFlags(scene, hc, ac, opts) {
+    const flagTex = (c1, c2, kind) => canvasTex(128, 64, (g, w, h) => {
+      g.fillStyle = c1; g.fillRect(0, 0, w, h);
+      g.fillStyle = c2;
+      if (kind === 0) for (let i = 0; i < 4; i++) g.fillRect(i * 32 + 16, 0, 16, h);
+      else if (kind === 1) { g.fillRect(0, h / 3, w, h / 3); }
+      else { g.beginPath(); g.moveTo(0, 0); g.lineTo(w, h); g.lineTo(w, h * 0.6); g.lineTo(w * 0.4, 0); g.fill(); }
+    });
+    this.flagUniforms = { uTime: { value: 0 } };
+    const geo = new THREE.PlaneGeometry(3.2, 2.1, 12, 4); geo.translate(1.6, 0, 0);
+    const mkMat = (tex, seed) => {
+      const m = new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.9 });
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uTime = this.flagUniforms.uTime;
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\n float k = position.x / 3.2; transformed.z += sin(uTime * 5.0 + position.x * 2.2 + modelMatrix[3][2]) * 0.35 * k; transformed.y += sin(uTime * 3.0 + position.x) * 0.1 * k;');
+      };
+      m.customProgramCacheKey = () => 'flag';
+      return m;
+    };
+    const rng = new RNG('drapeaux');
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x777777 });
+    const spots = [];
+    for (let i = 0; i < 9; i++) spots.push({ x: 64 + rng.range(0, 14), z: -24 + i * 6 + rng.range(-1, 1), c: hc });
+    for (let i = 0; i < 5; i++) spots.push({ x: -64 - rng.range(0, 10), z: -14 - i * 4.5, c: ac });
+    spots.forEach((p, i) => {
+      const D = Math.abs(p.x) - (HL + 2);
+      const y = 0.9 + Math.max(0, (D - 8) / 0.85) * 0.42 + 2.2;
+      const flag = new THREE.Mesh(geo, mkMat(flagTex(p.c[0], p.c[1], i % 3)));
+      flag.position.set(p.x, y + 1.6, p.z);
+      flag.rotation.y = Math.sign(p.x) > 0 ? Math.PI / 2 + 0.6 : -Math.PI / 2 + 0.6;
+      scene.add(flag);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 3.6, 5), poleMat);
+      pole.position.set(p.x, y + 0.9, p.z); scene.add(pole);
+    });
+    // banderole au premier rang derrière le but
+    const city = (opts.homeName || '').split(' ').pop().toUpperCase();
+    const banTex = canvasTex(1024, 96, (g, w, h) => {
+      g.fillStyle = hc[0]; g.fillRect(0, 0, w, h);
+      g.fillStyle = hc[1]; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10);
+      g.font = 'italic 900 64px Arial Black, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = hc[1]; g.fillText(`ALLEZ ${city} ! ON EST CHEZ NOUS`, w / 2, h / 2 + 2, w - 40);
+    });
+    const ban = new THREE.Mesh(new THREE.PlaneGeometry(34, 3.2), new THREE.MeshStandardMaterial({ map: banTex, roughness: 0.9, side: THREE.DoubleSide }));
+    ban.position.set(HL + 2 + 8.3, 2.0, 0); ban.rotation.y = -Math.PI / 2; ban.rotation.x = 0.25;
+    scene.add(ban);
   }
 
   update(dt, t, exc, homeJoy, awayJoy, chant) {
     const u = this.uniforms;
+    if (this.flagUniforms) this.flagUniforms.uTime.value = t;
     u.uTime.value = t;
     u.uExc.value += (exc - u.uExc.value) * Math.min(1, dt * 2);
     u.uHomeJoy.value += (homeJoy - u.uHomeJoy.value) * Math.min(1, dt * 4);

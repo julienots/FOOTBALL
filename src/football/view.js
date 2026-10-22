@@ -6,6 +6,31 @@ import { Crowd } from './crowd.js';
 import { Players } from './players.js';
 import { HL, HW, SNAP_LEN, ENT, DT } from './engine.js';
 import { clamp } from '../core/rng.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+// Étalonnage façon diffusion TV : contraste, saturation, vignettage, grain
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uSat: { value: 0.98 }, uVig: { value: 0.28 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uTime; uniform float uSat; uniform float uVig; varying vec2 vUv;
+    float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + uTime) * 43758.5453); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(l), c.rgb, uSat);
+      c.rgb = (c.rgb - 0.5) * 1.06 + 0.5;
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - uVig * dot(d, d) * 2.2;
+      c.rgb += (rnd(vUv * 731.0) - 0.5) * 0.012;
+      gl_FragColor = c;
+    }`,
+};
 
 const tmpA = new Float32Array(SNAP_LEN), tmpB = new Float32Array(SNAP_LEN), tmpC = new Float32Array(SNAP_LEN);
 
@@ -28,9 +53,30 @@ export class FootballView {
       vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: 'uniform vec3 top; uniform vec3 bot; varying vec3 vP; void main(){ float h = clamp(normalize(vP).y * 1.6, 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, h), 1.0);\n#include <colorspace_fragment>\n}',
     });
-    scene.add(new THREE.Mesh(skyGeo, skyMat));
+    if (night) scene.add(new THREE.Mesh(skyGeo, skyMat));
+    else {
+      // ciel physique (diffusion atmosphérique) et soleil
+      const sky = new Sky(); sky.scale.setScalar(900);
+      const u = sky.material.uniforms;
+      u.turbidity.value = sunset ? 8 : 3; u.rayleigh.value = sunset ? 2.5 : 1.2; u.mieCoefficient.value = 0.004; u.mieDirectionalG.value = 0.85;
+      u.sunPosition.value.setFromSphericalCoords(1, THREE.MathUtils.degToRad(sunset ? 84 : 52), THREE.MathUtils.degToRad(210));
+      sky.material.fog = false;
+      scene.add(sky);
+    }
+    if (night) {
+      // étoiles
+      const sg = new THREE.BufferGeometry(); const sp = [];
+      for (let i = 0; i < 600; i++) { const a = Math.random() * 6.283, e = 0.15 + Math.random() * 1.3; sp.push(Math.cos(a) * Math.cos(e) * 850, Math.sin(e) * 850, Math.sin(a) * Math.cos(e) * 850); }
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+      scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
+    }
+    // éclairage d'ambiance par image (reflets réalistes sur les matières)
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = night ? 0.15 : 0.3;
+    pm.dispose();
     // lumières
-    const hemi = new THREE.HemisphereLight(night ? 0x8899cc : 0xcfe6ff, 0x34502a, night ? 0.55 : 0.75);
+    const hemi = new THREE.HemisphereLight(night ? 0x8899cc : 0xcfe6ff, 0x34502a, night ? 0.45 : 0.55);
     scene.add(hemi);
     const key = new THREE.DirectionalLight(night ? 0xfff6e8 : sunset ? 0xffc28a : 0xfff4e0, night ? 2.3 : sunset ? 2.0 : 2.6);
     key.position.set(night ? 20 : -60, night ? 120 : 90, night ? 40 : 50);
@@ -46,13 +92,25 @@ export class FootballView {
       fill.position.set(-30, 100, -60); scene.add(fill);
     }
     this.stadium = new Stadium(scene, { night, homeColor: info.home.colors[0], awayColor: info.away.colors[0], quality, seed: info.seed });
-    this.crowd = new Crowd(scene, this.stadium, { homeColors: info.home.colors, awayColors: info.away.colors, quality, attendance: info.attendance ?? 0.93 });
+    this.crowd = new Crowd(scene, this.stadium, { homeColors: info.home.colors, awayColors: info.away.colors, quality, attendance: info.attendance ?? 0.93, homeName: info.home.city || info.home.name });
     if (night) this.crowd.uniforms.uLight.value.setRGB(0.75, 0.78, 0.85);
     this.players = new Players(scene, quality);
     this.camera = new THREE.PerspectiveCamera(26, 16 / 9, 0.5, 2000);
     this.cam = { pos: new THREE.Vector3(0, 20, 63), look: new THREE.Vector3(0, 0, 0), fov: 26 };
     this.mode = 'wide';
     this.replay = null;
+    // post-traitement : halo des projecteurs + étalonnage TV
+    if (quality !== 'low') {
+      const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: quality === 'high' ? 4 : 2 });
+      this.composer = new EffectComposer(renderer, rt);
+      this.composer.addPass(new RenderPass(scene, this.camera));
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), night ? 0.45 : 0.16, 0.45, night ? 0.9 : 0.96);
+      this.composer.addPass(this.bloom);
+      this.grade = new ShaderPass(GradeShader);
+      this.composer.addPass(this.grade);
+      this.composer.addPass(new OutputPass());
+    }
     this.t = 0;
     this.joy = [0, 0];
     this.chant = 0;
@@ -72,10 +130,12 @@ export class FootballView {
           shirt, shorts: gk ? '#1a1a1a' : kit.shorts, socks: gk ? '#1a1a1a' : kit.shirt, skin: d.look.skin, hair: d.look.hairColor,
           hairStyle: d.look.hairStyle, height: d.look.height, number: d.number, numColor: lum(shirt) > 0.6 ? '#111111' : '#ffffff',
           gloves: gk ? '#f5f5f5' : null, boot: ['#111111', '#f5f5f5', '#ff6d00', '#00e5ff'][d.id % 4], leftFoot: d.foot === 'gauche', id: d.id,
+          beard: d.look.beard, pattern: gk ? 0 : (kit.shirt === tm.data.colors[0] ? tm.data.pattern || 0 : 0), shirt2: tm.data.colors[1],
+          sponsor: tm.data.sponsor ?? -1, trim: tm.data.colors[1], badgeColor: lum(tm.data.colors[1]) > 0.5 ? tm.data.colors[1] : '#d4af37',
         });
       }
     }
-    const refKit = { shirt: '#101010', shorts: '#101010', socks: '#101010', skin: 0.3, hair: '#222', hairStyle: 0, height: 1.8, number: 0, numColor: '#101010' };
+    const refKit = { shirt: '#101010', shorts: '#101010', socks: '#101010', skin: 0.3, hair: '#222', hairStyle: 0, height: 1.8, number: 0, numColor: '#101010', official: true, sponsor: -1, trim: '#444444' };
     this.players.setMeta(22, refKit);
     this.players.setMeta(23, { ...refKit, shirt: '#e6d200', skin: 0.15 });
     this.players.setMeta(24, { ...refKit, shirt: '#e6d200', skin: 0.6 });
@@ -85,6 +145,10 @@ export class FootballView {
   resize(w, h) {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
   }
 
   // Lance un ralenti à partir d'un clip enregistré par le moteur
@@ -156,7 +220,8 @@ export class FootballView {
     this.joy[0] *= Math.pow(0.5, dt / 6); this.joy[1] *= Math.pow(0.5, dt / 6);
     this.stadium.update(dt, this.t);
     this.direct(dt, engine, A, B, alpha, replaying, overlayState);
-    R.render(this.scene, this.camera);
+    if (this.composer) { this.grade.uniforms.uTime.value = this.t % 10; this.composer.render(); }
+    else R.render(this.scene, this.camera);
   }
 
   lineup(A, B, p) {
@@ -269,6 +334,8 @@ export class FootballView {
   }
 
   dispose() {
+    if (this.composer) { this.composer.renderTarget1.dispose(); this.composer.renderTarget2.dispose(); this.composer.dispose?.(); }
+    if (this.scene.environment) this.scene.environment.dispose();
     this.scene.traverse(o => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
