@@ -158,7 +158,7 @@ export class FootballView {
     const end = n - 1;
     if (clip.info && clip.info.pen) opts.short = true;
     const angles = opts.short ? [{ from: Math.max(0, end - (clip.info && clip.info.pen ? 80 : 150)), to: end, speed: 0.75, cam: 'goal' }]
-      : [{ from: Math.max(0, end - 150), to: end - 15, speed: 0.6, cam: 'goal' }, { from: Math.max(0, end - 95), to: end - 35, speed: 0.38, cam: 'low' }];
+      : [{ from: Math.max(0, end - 150), to: end - 15, speed: 0.6, cam: (clip.frames.length + (clip.info?.minute || 0)) % 2 ? 'goal' : 'spider' }, { from: Math.max(0, end - 95), to: end - 35, speed: 0.38, cam: 'low' }];
     const last = clip.frames[Math.max(0, n - 51)];
     const side = Math.sign(last[25 * ENT] || 1);
     this.replay = { clip, angles, ai: 0, f: angles[0].from, done: false, onEnd: opts.onEnd, side };
@@ -213,6 +213,7 @@ export class FootballView {
     }
     const key = engine.teams.map(t => t.players.map(p => p.data.id).join(',')).join('|');
     if (key !== this.rosterKey && !replaying) this.setRoster(engine);
+    this.players.camPos = this.camera.position; this.players.lodZoom = this.camera.fov / 40;
     this.players.update(A, B, alpha, dt, {});
     // ambiance tribunes
     const exc = engine.excitement ?? 0.3;
@@ -291,6 +292,7 @@ export class FootballView {
       const ang = this.replay.angles[this.replay.ai];
       const side = this.replay.side;
       if (ang.cam === 'goal') { pos.set(side * (HL + 17), 7.5, bz * 0.35 + 6); look.set(bx * 0.7 + side * HL * 0.3, 0.8, bz * 0.8); fov = 34; }
+      else if (ang.cam === 'spider') { pos.set(bx - side * 15, 10.5, bz * 0.6 + 5); look.set(bx + side * 5, 0.4, bz); fov = 38; }
       else { pos.set(bx - side * 12, 1.7, bz + (bz > 0 ? 10 : -10)); look.set(bx, 1.0, bz); fov = 30; }
       k = 6;
       if (this.replay.f === ang.from) k = 1000;
@@ -311,14 +313,37 @@ export class FootballView {
     } else if (mode === 'pens') {
       pos.set(HL - 25, 3.2, 1.5); look.set(HL, 1.2, 0); fov = 24; k = 3;
     } else {
-      // plan large de la tribune principale
-      const tx = clamp(bx * 0.8, -40, 40);
-      pos.set(tx, 19.5, 63);
-      look.set(clamp(bx, -HL + 4, HL - 4) * 0.97, 0, clamp(bz * 0.6, -18, 22));
-      const dz = 63 - bz;
-      fov = clamp(12 + dz * 0.12, 17, 27);
-      if (Math.abs(bx) > HL - 18) fov -= 1.5;
-      if (bh > 4) fov += 2;
+      // caméra principale fixe en haut de la tribune, à hauteur de la ligne
+      // médiane : comme en vrai elle ne se déplace pas, elle pivote et zoome.
+      pos.set(0, 20, 63);
+      const vx = (bx - (cam.lastBx ?? bx)) / Math.max(dt, 1e-3);
+      cam.lastBx = bx;
+      cam.lead = (cam.lead || 0) + (clamp(vx, -14, 14) * 0.55 - (cam.lead || 0)) * Math.min(1, dt * 0.9);
+      look.set(clamp(bx + cam.lead, -HL + 9, HL - 9), 0.5, clamp(bz * 0.8 + 1.5, -22, 24));
+      // largeur de champ cadrée : plus serrée près des surfaces, plus large sur les ballons aériens
+      let W = 40 - Math.max(0, Math.abs(bx) - (HL - 25)) * 0.25 + Math.min(14, Math.max(0, bh - 2) * 1.6);
+      const dist = Math.hypot(look.x - pos.x, look.y - pos.y, look.z - pos.z);
+      const hf = 2 * Math.atan((W / 2) / dist);
+      fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(hf / 2) / Math.max(1.2, this.camera.aspect)));
+    }
+    if (mode === 'wide' && !replaying) {
+      // panoramique de cadreur : ressort amorti (accélère, puis se pose en douceur)
+      cam.lv = cam.lv || new THREE.Vector3();
+      if (cam.lastMode !== 'wide') { cam.pos.copy(pos); cam.look.copy(look); cam.lv.set(0, 0, 0); cam.fov = fov; }
+      const w = 1.9;
+      const ax = (look.x - cam.look.x) * w * w - cam.lv.x * 2 * w, az = (look.z - cam.look.z) * w * w - cam.lv.z * 2 * w;
+      cam.lv.x += ax * dt; cam.lv.z += az * dt;
+      cam.look.x += cam.lv.x * dt; cam.look.z += cam.lv.z * dt; cam.look.y = look.y;
+      cam.pos.copy(pos);
+      cam.fov += (fov - cam.fov) * Math.min(1, dt * 0.7);
+      cam.lastMode = mode;
+      this.camera.position.copy(cam.pos);
+      // micro-tremblement de la tête de caméra
+      this.camera.position.x += Math.sin(this.t * 1.3) * 0.03 + Math.sin(this.t * 3.1) * 0.01;
+      this.camera.position.y += Math.sin(this.t * 0.9) * 0.025;
+      this.camera.lookAt(cam.look);
+      if (Math.abs(this.camera.fov - cam.fov) > 0.01) { this.camera.fov = cam.fov; this.camera.updateProjectionMatrix(); }
+      return;
     }
     const f = Math.min(1, dt * k);
     if (cam.lastMode !== mode && mode !== 'wide') { cam.pos.copy(pos); cam.look.copy(look); cam.fov = fov; }

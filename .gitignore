@@ -9,3 +9,4 @@ android/app/src/main/assets/public/
 .DS_Store
 public/voices/*.onnx*
 dev/
+public/body/

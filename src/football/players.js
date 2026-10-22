@@ -4,6 +4,12 @@ import * as THREE from 'three';
 import { ENT, ACT } from './engine.js';
 import { canvasTex } from './stadium.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { bodyGeometry, makeSkeleton, bodyMaterial, hairGeometries, BONES } from './body.js';
+
+// pièces remplacées par le corps lisse animé
+const SMOOTH_EYE_Z = 0.074;
+const SMOOTH_SKIP = new Set(['torso', 'neck', 'head', 'nose', 'mouth', 'sleeve', 'upperArm', 'forearm', 'shortsTop', 'shortLeg', 'thigh', 'shin', 'hair0', 'hair1', 'hair2', 'hair3', 'hair4', 'beard']);
+const LOD_FAR = 24; // m : au-delà, maillage allégé
 
 const N = 25;
 
@@ -85,7 +91,7 @@ function bodyGeometries() {
   beardG.scale(0.9, 0.86, 0.98); beardG.translate(0, 0.058, 0.02);
   const nose = merge(new THREE.ConeGeometry(0.017, 0.045, 10).rotateX(Math.PI / 2 + 0.35).translate(0, 0.098, 0.1), sph(0.012, 1.3, 0.8, 1, 0, 0.083, 0.111, 10, 6));
   const mouth = sph(0.024, 1, 0.22, 0.45, 0, 0.062, 0.084, 12, 6);
-  const brow = new THREE.BoxGeometry(0.032, 0.007, 0.012).translate(0, 0.024, 0.002);
+  const brow = new THREE.BoxGeometry(0.034, 0.0075, 0.01).translate(0, 0.02, 0.019);
   const eye = sph(0.0135, 1, 0.78, 0.6, 0, 0, 0, 12, 8);
   const pupil = sph(0.0072, 1, 1, 0.5, 0, 0, 0.0075, 10, 6);
   const ear = sph(0.026, 0.38, 1, 0.68, 0, 0, 0, 10, 8);
@@ -221,11 +227,11 @@ class Rig {
     this.root.add(this.pelvis); this.pelvis.position.y = 0.98;
     this.pelvis.add(this.torso); this.torso.position.y = 0.04;
     this.torso.add(this.neck); this.neck.position.y = 0.55;
-    this.torso.add(this.collar); this.collar.position.y = 0.588;
+    this.torso.add(this.collar); this.collar.position.y = 0.572;
     this.torso.add(this.head); this.head.position.y = 0.65;
     this.head.add(this.hair); this.hair.position.y = 0.125;
-    this.head.add(this.eyeL); this.eyeL.position.set(0.036, 0.128, 0.087);
-    this.head.add(this.eyeR); this.eyeR.position.set(-0.036, 0.128, 0.087);
+    this.head.add(this.eyeL); this.eyeL.position.set(0.036, 0.128, SMOOTH_EYE_Z);
+    this.head.add(this.eyeR); this.eyeR.position.set(-0.036, 0.128, SMOOTH_EYE_Z);
     this.head.add(this.earL); this.earL.position.set(0.094, 0.115, -0.005);
     this.head.add(this.earR); this.earR.position.set(-0.094, 0.115, -0.005);
     this.torso.add(this.num); this.num.position.set(0, 0.34, -0.118); this.num.rotation.y = Math.PI;
@@ -251,20 +257,21 @@ class Rig {
 }
 
 export class Players {
-  constructor(scene, quality) {
+  constructor(scene, quality, opts = {}) {
     this.scene = scene;
+    this.smooth = opts.smooth !== false;
     const G = bodyGeometries();
     const tex = { shirt: fabricTex('shirt'), shorts: fabricTex('shorts'), socks: fabricTex('sock'), skin: fabricTex('skin'), face: fabricTex('face'), hair: fabricTex('hair'), boot: fabricTex('boot') };
     const knit = normalTex('knit'), pores = normalTex('skin');
     const numTex = numberAtlas(), spTex = sponsorAtlas();
     const hi = quality !== 'low';
     this.meshes = {};
-    this.parts = PARTS;
+    this.parts = this.smooth ? PARTS.filter(p => !SMOOTH_SKIP.has(p[0])) : PARTS;
     const atlasShader = (cols, rows) => (sh) => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aNum;')
         .replace('#include <uv_vertex>', `#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = (vMapUv + vec2(mod(aNum, ${cols}.0), ${rows - 1}.0 - floor(aNum / ${cols}.0))) / vec2(${cols}.0, ${rows}.0);\n#endif`);
     };
-    for (const [k, nodes, col] of PARTS) {
+    for (const [k, nodes, col] of this.parts) {
       const geo = G[k];
       const count = N * nodes.length;
       let mat;
@@ -325,6 +332,32 @@ export class Players {
       scene.add(m);
     }
     this.rigs = Array.from({ length: N }, () => new Rig());
+    // corps lisses (un maillage animé par personnage, géométrie partagée) + cheveux/barbe
+    if (this.smooth) {
+      this.geo = { near: bodyGeometry(quality), far: bodyGeometry('far'), hairNear: hairGeometries(quality), hairFar: hairGeometries('far') };
+      const hairTex = tex.hair;
+      this.bodies = Array.from({ length: N }, () => {
+        const { bones, map } = makeSkeleton();
+        const mat = bodyMaterial(quality === 'high', { knit });
+        const mesh = new THREE.SkinnedMesh(this.geo.near, mat);
+        mesh.add(map.root);
+        mesh.updateMatrixWorld(true);
+        const skel = new THREE.Skeleton(bones);
+        mesh.bind(skel);
+        mesh.frustumCulled = false;
+        mesh.castShadow = quality !== 'low';
+        mesh.visible = false;
+        scene.add(mesh);
+        const hairMat = new THREE.MeshStandardMaterial({ map: hairTex, roughness: 0.75 });
+        const hair = new THREE.Mesh(this.geo.hairNear.hair1, hairMat);
+        hair.position.y = 0.125; hair.castShadow = quality !== 'low'; hair.frustumCulled = false;
+        map.head.add(hair);
+        const beard = new THREE.Mesh(this.geo.hairNear.beard, hairMat);
+        beard.frustumCulled = false; beard.visible = false;
+        map.head.add(beard);
+        return { mesh, mat, bones: map, hair, beard, hairMat, far: false, style: 1 };
+      });
+    }
     this.meta = new Array(N).fill(null);
     this.hidden = new Array(N).fill(false);
     // ballon
@@ -353,7 +386,7 @@ export class Players {
       arm: meta.gloves || meta.longSleeves ? meta.shirt : skin, hand: meta.gloves || skin, shadow: '#000000', leg: meta.trousers ? meta.shorts : skin,
       sponsorCol: meta.sponsorColor || (lum(meta.shirt) > 0.55 ? '#1a1a1a' : '#ffffff'), badgeCol: meta.badgeColor || '#d4af37',
     };
-    for (const [k, nodes, col] of PARTS) {
+    for (const [k, nodes, col] of this.parts) {
       const m = this.meshes[k];
       let c = colors[col];
       if (meta.tank && k === 'sleeve') c = skin;
@@ -365,10 +398,22 @@ export class Players {
       a.array[i] = meta.number ?? 0; a.needsUpdate = true;
     }
     const sp = this.meshes.sponsor.geometry.attributes.aNum; sp.array[i] = Math.max(0, meta.sponsor ?? 0); sp.needsUpdate = true;
-    const tg = this.meshes.torso.geometry;
     const c2 = new THREE.Color(meta.shirt2 || meta.shirt);
-    tg.attributes.aCol2.setXYZ(i, c2.r, c2.g, c2.b); tg.attributes.aCol2.needsUpdate = true;
-    tg.attributes.aPat.array[i] = meta.pattern || 0; tg.attributes.aPat.needsUpdate = true;
+    if (this.meshes.torso) {
+      const tg = this.meshes.torso.geometry;
+      tg.attributes.aCol2.setXYZ(i, c2.r, c2.g, c2.b); tg.attributes.aCol2.needsUpdate = true;
+      tg.attributes.aPat.array[i] = meta.pattern || 0; tg.attributes.aPat.needsUpdate = true;
+    }
+    if (this.bodies) {
+      const u = this.bodies[i].mat.userData.u;
+      u.uShirt.value.set(meta.shirt); u.uShirt2.value.copy(c2); u.uShorts.value.set(meta.shorts); u.uSocks.value.set(meta.socks);
+      u.uSkin.value.copy(skin); u.uPat.value = meta.pattern || 0;
+      u.uFlags.value.set(meta.gloves || meta.longSleeves ? 1 : 0, meta.trousers ? 1 : 0, meta.tank ? 1 : 0, 0);
+      const b = this.bodies[i];
+      b.style = meta.hairStyle ?? 4; b.hasBeard = !!meta.beard;
+      b.hairMat.color.set(meta.hair || '#222');
+      this.applyLod(b, b.far, true);
+    }
   }
 
   // Pose et matrices de tous les joueurs à partir de deux instantanés interpolés
@@ -389,6 +434,7 @@ export class Players {
       this.pose(rig, meta, x, y, ang, sp, act, actT, dt, i >= 22 ? i - 21 : 0);
       rig.root.updateMatrixWorld(true);
       this.write(i, rig);
+      if (this.bodies) this.syncBody(i, rig);
     }
     for (const k in this.meshes) this.meshes[k].instanceMatrix.needsUpdate = true;
     // drapeaux des assistants
@@ -415,15 +461,37 @@ export class Players {
     this.ball.visible = !opts.hideBall;
   }
 
+  applyLod(b, far, force) {
+    if (b.far === far && !force) return;
+    b.far = far;
+    const H = far ? this.geo.hairFar : this.geo.hairNear;
+    b.mesh.geometry = far ? this.geo.far : this.geo.near;
+    b.hair.geometry = H['hair' + b.style] || H.hair1;
+    b.beard.geometry = H.beard; b.beard.visible = b.hasBeard;
+  }
+
+  syncBody(i, rig) {
+    const b = this.bodies[i];
+    b.mesh.visible = true;
+    if (this.camPos) {
+      const r = rig.root.position, c = this.camPos;
+      const d = Math.hypot(r.x - c.x, r.z - c.z, c.y);
+      // distance « vue » corrigée du zoom de la caméra
+      this.applyLod(b, d * (this.lodZoom || 1) > LOD_FAR);
+    }
+    for (const n of BONES) { const bone = b.bones[n], src = rig[n]; bone.position.copy(src.position); bone.quaternion.copy(src.quaternion); bone.scale.copy(src.scale); }
+  }
+
   writeHidden(i) {
+    if (this.bodies) this.bodies[i].mesh.visible = false;
     const z = this._m.makeScale(0, 0, 0);
-    for (const [k, nodes] of PARTS) for (let j = 0; j < nodes.length; j++) this.meshes[k].setMatrixAt(i * nodes.length + j, z);
+    for (const [k, nodes] of this.parts) for (let j = 0; j < nodes.length; j++) this.meshes[k].setMatrixAt(i * nodes.length + j, z);
   }
 
   write(i, r) {
     const meta = this.meta[i];
     const z = this._m.makeScale(0, 0, 0);
-    for (const [k, nodes, , cond] of PARTS) {
+    for (const [k, nodes, , cond] of this.parts) {
       const m = this.meshes[k];
       const show = !cond || cond(meta);
       for (let j = 0; j < nodes.length; j++) m.setMatrixAt(i * nodes.length + j, show ? r[nodes[j]].matrixWorld : z);

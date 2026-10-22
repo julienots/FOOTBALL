@@ -16,6 +16,7 @@ import { initAudio, zap, setMasterVolume, sting } from './audio/audio.js';
 import { voice } from './audio/voice.js';
 import { BetCenter } from './bet/bets.js';
 import { neural } from './tts/neural.js';
+import { preloadBodies } from './football/body.js';
 
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const params = new URLSearchParams(location.search);
@@ -32,6 +33,7 @@ class App {
     if (params.get('q')) this.settings.quality = params.get('q');
     this.offset = (+params.get('offset') || 0) * 60000;
     this.world = getWorld();
+    this.bodiesReady = preloadBodies([this.settings.quality, 'far']);
     this.canvas = document.getElementById('gl');
     this.tvRoot = document.getElementById('tv');
     this.player = document.getElementById('player');
@@ -246,6 +248,7 @@ class App {
         });
       } catch (e) { /* facultatif */ }
     }
+    await Promise.race([this.bodiesReady, new Promise(r => setTimeout(r, 4000))]);
     const start = params.get('ch') ? +params.get('ch') - 1 : this.settings.channel || 0;
     this.tune(start, true);
     this.showTab(params.get('tab') || 'chaines');

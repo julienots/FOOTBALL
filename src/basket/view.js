@@ -200,6 +200,7 @@ export class BasketView {
     const i1 = (engine.ringPos - 1 + 4) % 4, i0 = (engine.ringPos - 2 + 4) % 4;
     const A = ring.subarray(i0 * SNAP_LEN, (i0 + 1) * SNAP_LEN), B = ring.subarray(i1 * SNAP_LEN, (i1 + 1) * SNAP_LEN);
     const alpha = clamp(1 - (engine.wall - target) / BDT, 0, 1);
+    this.players.camPos = this.camera.position; this.players.lodZoom = this.camera.fov / 40;
     this.players.update(A, B, alpha, dt, { hideBall: true });
     const bo = 25 * ENT;
     const bx = A[bo] + (B[bo] - A[bo]) * alpha, bz = A[bo + 1] + (B[bo + 1] - A[bo + 1]) * alpha, bh = A[bo + 2] + (B[bo + 2] - A[bo + 2]) * alpha;

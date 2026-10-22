@@ -56,6 +56,7 @@ class Cast {
       pose(i, r, this.t);
       r.root.updateMatrixWorld(true);
       this.pl.write(i, r);
+      if (this.pl.bodies) this.pl.syncBody(i, r);
     }
     for (const k in this.pl.meshes) this.pl.meshes[k].instanceMatrix.needsUpdate = true;
   }

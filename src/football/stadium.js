@@ -39,15 +39,22 @@ function grassNormal(rng) {
 function grassTexture(rng) {
   return canvasTex(2048, 1024, (g, w, h) => {
     // bandes de tonte
-    const stripes = 18;
+    const stripes = 20;
     for (let i = 0; i < stripes; i++) {
-      g.fillStyle = i % 2 ? '#2b5b22' : '#36682b';
-      g.fillRect((i * w) / stripes, 0, w / stripes + 1, h);
+      // bandes de tonte parallèles aux lignes de but, bords légèrement fondus
+      const x0 = (i * w) / stripes, x1 = ((i + 1) * w) / stripes;
+      const grd = g.createLinearGradient(x0, 0, x1, 0);
+      const a = i % 2 ? '#2d5e24' : '#376a2c', b = i % 2 ? '#2f6126' : '#35672a';
+      grd.addColorStop(0, b); grd.addColorStop(0.08, a); grd.addColorStop(0.92, a); grd.addColorStop(1, b);
+      g.fillStyle = grd; g.fillRect(x0, 0, x1 - x0 + 1, h);
     }
-    // bandes transversales légères (damier)
-    g.globalAlpha = 0.035;
-    for (let j = 0; j < 10; j++) { g.fillStyle = j % 2 ? '#000' : '#fff'; g.fillRect(0, (j * h) / 10, w, h / 10); }
-    g.globalAlpha = 1;
+    // légères variations de teinte (zones plus sèches / plus vertes)
+    for (let k = 0; k < 40; k++) {
+      const cx = rng.next() * w, cy = rng.next() * h, r = 60 + rng.next() * 160;
+      const grd = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grd.addColorStop(0, rng.next() < 0.5 ? 'rgba(120,130,40,0.06)' : 'rgba(20,60,20,0.06)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+    }
     // grain de l'herbe
     const img = g.getImageData(0, 0, w, h);
     const d = img.data;
@@ -305,7 +312,7 @@ export class Stadium {
     G.add(ground);
     // pelouse
     const grass = grassTexture(this.rng);
-    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(HL * 2 + 14, HW * 2 + 14), new THREE.MeshStandardMaterial({ map: grass, roughness: 0.88, metalness: 0, normalMap: quality === 'low' ? null : grassNormal(this.rng), normalScale: new THREE.Vector2(0.55, 0.55) }));
+    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(HL * 2 + 14, HW * 2 + 14), new THREE.MeshStandardMaterial({ map: grass, roughness: 0.88, metalness: 0, normalMap: quality === 'low' ? null : grassNormal(this.rng), normalScale: new THREE.Vector2(0.4, 0.4) }));
     pitch.rotation.x = -Math.PI / 2; pitch.receiveShadow = true;
     G.add(pitch);
     // piste autour (zone technique)

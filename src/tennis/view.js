@@ -147,6 +147,7 @@ export class TennisView {
     const i1 = (m.ringPos - 1 + 4) % 4, i0 = (m.ringPos - 2 + 4) % 4;
     const A = ring.subarray(i0 * SNAP_LEN, (i0 + 1) * SNAP_LEN), B = ring.subarray(i1 * SNAP_LEN, (i1 + 1) * SNAP_LEN);
     const alpha = clamp(1 - (m.wall - target) / TDT, 0, 1);
+    this.players.camPos = this.camera.position; this.players.lodZoom = this.camera.fov / 40;
     this.players.update(A, B, alpha, dt, { hideBall: true });
     // raquettes dans la main droite (ou gauche pour les gauchers)
     m.pl.forEach((p, k) => {
