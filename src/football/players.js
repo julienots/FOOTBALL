@@ -548,6 +548,26 @@ export class Players {
         r.uaL.rotation.set(-1.6 * down, 0, -0.4); r.uaR.rotation.set(-1.6 * down, 0, 0.4);
         break;
       }
+      case 17: { // service (tennis)
+        const p = kp(1.2);
+        const toss = Math.min(1, p / 0.6), hit = p > 0.6 ? (p - 0.6) / 0.4 : 0;
+        r.uaL.rotation.set(-2.9 * toss * (1 - hit), 0, -0.2); r.faL.rotation.set(0, 0, 0);
+        r.uaR.rotation.set(-2.2 - 0.8 * toss + hit * 3.6, 0, 0.5 - hit * 0.6); r.faR.rotation.set(-1.4 * toss * (1 - hit), 0, 0);
+        r.torso.rotation.x = -0.25 * toss + hit * 0.45;
+        r.pelvis.position.y += hit > 0 && hit < 0.6 ? 0.12 : 0;
+        r.thL.rotation.x = -0.25 * toss; r.shL.rotation.x = 0.5 * toss;
+        break;
+      }
+      case 18: case 19: { // coup droit / revers
+        const p = kp(0.5);
+        const side = act === 18 ? 1 : -1;
+        const sw = p < 0.4 ? -p / 0.4 : -1 + (p - 0.4) / 0.6 * 2.2;
+        r.torso.rotation.y = side * (-0.9 + (sw + 1) * 0.8);
+        r.uaR.rotation.set(-1.0, 0, side * (0.6 + sw * 0.9)); r.faR.rotation.set(-0.5, 0, 0);
+        r.uaL.rotation.set(-0.6, 0, -0.3 - (act === 19 ? 0.8 : 0)); r.faL.rotation.set(-1.0, 0, 0);
+        r.pelvis.position.y -= 0.1; r.thL.rotation.x = -0.4; r.thR.rotation.x = 0.2; r.shL.rotation.x = 0.7; r.shR.rotation.x = 0.6;
+        break;
+      }
       case 11: { // tir en suspension (basket)
         const p = kp(0.7);
         const j = Math.sin(Math.min(1, p * 1.3) * Math.PI);

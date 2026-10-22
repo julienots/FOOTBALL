@@ -1,0 +1,10 @@
+import { getRacing } from '../src/racing/data.js';
+import { RaceSim, getTrack } from '../src/racing/engine.js';
+const tr = getTrack();
+console.log('longueur piste', Math.round(tr.len), 'm');
+const t0 = Date.now();
+const r = new RaceSim({ drivers: getRacing().drivers, seed: 'rt1' });
+r.syncTo(1e9);
+const c = {}; for (const e of r.events) c[e.type] = (c[e.type] || 0) + 1;
+console.log('durée', Math.round(r.t / 60), 'min', Date.now() - t0, 'ms', c, 'meilleur tour', r.fastest.t.toFixed(2));
+console.log(r.results.slice(0, 6).map(x => `${x.finishPos}. ${x.d.code} (grille ${x.grid})`).join(' | '));

@@ -14,17 +14,17 @@ import { esc, teamBadge } from '../tv/overlay.js';
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 export class FootChannel {
-  constructor(app) {
+  constructor(app, opts = {}) {
     this.app = app;
-    this.id = 'foot';
-    this.name = 'FOOT+';
-    this.color = '#00c853';
-    this.num = 1;
+    this.id = opts.id || 'foot';
+    this.name = opts.name || 'FOOT+';
+    this.color = opts.color || '#00c853';
+    this.num = opts.num || 1;
     this.slot = null;
     this.engine = null;
     this.view = null;
     this.loading = null;
-    this.ads = new AdBreak(app.tvRoot, 'FOOT+');
+    this.ads = new AdBreak(app.tvRoot, this.name);
     this.lastHighlight = 0;
     this.playedClips = new Set();
     this.visible = false;
@@ -85,12 +85,12 @@ export class FootChannel {
     // contexte pour les commentateurs (classement, buts de la saison)
     const ctx = { home: info.home, away: info.away, comp: info.compName, roundLabel: info.roundLabel, stadium: info.neutral ? 'Stade International' : info.home.stadium, night, ranks: {}, seasonGoals: {}, players: this.app.world.players };
     try {
-      if (info.item.comp === 'L') {
+      if (info.season && info.item.comp === 'L') {
         const tbl = await withTimeout(info.season.leagueTable(info.item.n, true), 1500);
         if (tbl) tbl.forEach((r, i) => (ctx.ranks[r.id] = i + 1));
         this.table = tbl;
       }
-      const sc = await withTimeout(info.season.topScorers(info.item.n, 200), 800);
+      const sc = info.season ? await withTimeout(info.season.topScorers(info.item.n, 200), 800) : null;
       if (sc) sc.forEach(x => (ctx.seasonGoals[x.player.id] = x.goals));
     } catch (e) { /* facultatif */ }
     if (token !== this.token) return;
@@ -138,7 +138,7 @@ export class FootChannel {
 
   enter() {
     this.visible = true;
-    this.app.overlay.setChannel('FOOT+', this.color);
+    this.app.overlay.setChannel(this.name, this.color);
     if (!this.sound && audioCtx()) this.sound = new StadiumSound();
     if (this.sound) this.sound.fadeIn();
     busGain('stadium', 1);
@@ -177,7 +177,7 @@ export class FootChannel {
     if (!this.sound && audioCtx()) { this.sound = new StadiumSound(); this.sound.fadeIn(); }
     this.app.hideLoader();
     // on garde le résultat final en cache pour les classements
-    if (E.period === 'end' && !this.saved) { this.saved = true; saveResult(this.info, this.k, E.summary()); this.info.season.setResult(this.info.item.comp, this.info.item.round, this.info.item.idx, E.summary(), this.info); }
+    if (E.period === 'end' && !this.saved) { this.saved = true; if (this.info.season) saveResult(this.info, this.k, E.summary()); if (this.info.season) this.info.season.setResult(this.info.item.comp, this.info.item.round, this.info.item.idx, E.summary(), this.info); }
 
     const phase = this.phase(now, s, target);
     this.phaseNow = phase;
@@ -206,7 +206,7 @@ export class FootChannel {
 
   showLoading() {
     const l = this.loading;
-    this.app.showLoader(`<div class="ld-chan">FOOT+</div><div class="ld-txt">${l ? l.text : 'Connexion…'}</div><div class="ld-bar"><i style="width:${Math.round((l?.progress || 0) * 100)}%"></i></div>`);
+    this.app.showLoader(`<div class="ld-chan">${this.name}</div><div class="ld-txt">${l ? l.text : 'Connexion…'}</div><div class="ld-bar"><i style="width:${Math.round((l?.progress || 0) * 100)}%"></i></div>`);
   }
 
   // Détermine ce qui passe à l'antenne
@@ -413,19 +413,19 @@ export class FootChannel {
     try {
       const n = await this.infoForSlot(s.slot + 1);
       const start = s.start + s.timing.cycle * 1000;
-      if (this.phaseNow?.name === 'post') O.matchCard(`À suivre · ${fmtTime(start + s.timing.pre * 1000)}`, n, 'Sur FOOT+');
+      if (this.phaseNow?.name === 'post') O.matchCard(`À suivre · ${fmtTime(start + s.timing.pre * 1000)}`, n, `Sur ${this.name}`);
     } catch (e) { /* rien */ }
   }
 
   tickerItems(s) {
     if (this._tk && this._tk.slot === s.slot && performance.now() - this._tk.t < 30000) return this._tk.items;
-    const items = [`FOOT+ · ${SPEEDS[this.k].short} par match · Toute la ${this.info.compName} en direct`];
+    const items = [`${this.name} · ${SPEEDS[this.k].short} par match · Toute la ${this.info.compName} en direct`];
     const nextStart = s.start + s.timing.cycle * 1000 + s.timing.pre * 1000;
     items.push(`Prochain coup d'envoi à ${fmtTime(nextStart)}`);
     if (this.table && this.table.length) items.push(`Leader de Ligue Élite : ${this.table[0].team.name} (${this.table[0].pts} pts)`);
     const sc = Object.entries(this.ctx?.seasonGoals || {}).sort((a, b) => b[1] - a[1])[0];
     if (sc) { const p = this.app.world.players[sc[0]]; if (p) items.push(`Meilleur buteur : ${p.name} (${sc[1]} buts)`); }
-    items.push('BASKET+ sur la chaîne 2 · SPORT 24 INFO sur la chaîne 3');
+    items.push(this.app.channels.filter(c => c !== this).map(c => `${c.name} sur la chaîne ${c.num}`).join(' · '));
     this._tk = { slot: s.slot, t: performance.now(), items };
     return items;
   }

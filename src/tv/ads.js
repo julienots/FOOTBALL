@@ -52,6 +52,66 @@ export const SPOTS = [
     vo: ['Le match commence ? Votre pizza arrive ! Pizza Roma Express, livrée en vingt-cinq minutes. Code match, moins vingt pour cent !'],
     music: { tempo: 116, key: 62, melody: [0, 4, 7, 4, 9, 7, 4, 0], bass: [0, 5, 7, 0], lead: 'triangle' },
   },
+  {
+    brand: 'GLACE POLAR', dur: 15, bg: 'linear-gradient(180deg, #e3f2fd, #90caf9)', fg: '#0d47a1', icon: '🍦', anim: 'float',
+    scenes: ['Il fait chaud ?', 'Fondez de plaisir', 'Nouveau parfum mangue', 'GLACE POLAR · Le froid qui fait du bien'],
+    vo: ['Il fait chaud ? Fondez de plaisir avec le nouveau parfum mangue. Glace Polar, le froid qui fait du bien !'],
+    music: { tempo: 110, key: 65, melody: [0, 4, 7, 12, 11, 7, 4, 2], bass: [0, 5, 7, 5], lead: 'triangle' },
+  },
+  {
+    brand: 'STARLINE AIR', dur: 20, bg: 'linear-gradient(160deg, #1a237e, #4a148c)', fg: '#ffffff', icon: '✈️', anim: 'fly',
+    scenes: ['Envie d\'ailleurs ?', 'Plus de 120 destinations', 'Aller simple dès 29 €', 'STARLINE AIR · Le ciel vous appartient'],
+    vo: ['Envie d\'ailleurs ? Plus de cent vingt destinations, aller simple dès vingt-neuf euros.', 'Starline Air. Le ciel vous appartient.'],
+    music: { tempo: 92, key: 60, melody: [7, 0, 9, 7, 12, 0, 11, 9], bass: [0, -3, -5, -7], lead: 'sine' },
+  },
+  {
+    brand: 'MÉGABOX GAMES', dur: 15, bg: 'linear-gradient(135deg, #00e676, #00b0ff, #d500f9)', fg: '#111111', icon: '🎮', anim: 'shake',
+    scenes: ['NIVEAU SUIVANT', 'La console nouvelle génération', '4K · 120 images/s', 'MÉGABOX GAMES · Jouez sans limite'],
+    vo: ['Niveau suivant ! La Mégabox, console nouvelle génération, quatre K, cent vingt images par seconde. Jouez sans limite !'],
+    music: { tempo: 150, key: 62, melody: [0, 12, 7, 12, 0, 15, 12, 7], bass: [0, 0, 3, 5], lead: 'square' },
+  },
+  {
+    brand: 'BURGER KAISER', dur: 15, bg: 'linear-gradient(135deg, #ff6f00, #d50000)', fg: '#fff8e1', icon: '🍔', anim: 'spin',
+    scenes: ['Le Kaiser XXL', 'Double steak, double fromage', 'Menu à 7,90 €', 'BURGER KAISER · Faim de champion'],
+    vo: ['Le Kaiser XXL. Double steak, double fromage. Le menu à sept euros quatre-vingt-dix. Burger Kaiser, faim de champion !'],
+    music: { tempo: 128, key: 64, melody: [0, 0, 7, 7, 9, 9, 7, 0], bass: [0, 5, 0, 7], lead: 'square' },
+  },
+  {
+    brand: 'ASSURANCE ÉGIDE', dur: 20, bg: 'linear-gradient(180deg, #37474f, #102027)', fg: '#ffffff', icon: '🛡️', anim: 'float',
+    scenes: ['Votre famille', 'votre maison, votre voiture', 'Protégés 24 h/24', 'ASSURANCE ÉGIDE · On est là pour vous'],
+    vo: ['Votre famille, votre maison, votre voiture. Protégés vingt-quatre heures sur vingt-quatre.', 'Assurance Égide. On est là pour vous.'],
+    music: { tempo: 80, key: 57, melody: [0, 4, 7, 4, 9, 7, 4, 2], bass: [0, -5, -3, -7], lead: 'sine' },
+  },
+  {
+    brand: 'PARIS+', dur: 15, bg: 'linear-gradient(135deg, #f9a825, #e65100)', fg: '#111111', icon: '💰', anim: 'shake',
+    scenes: ['Pariez sur vos équipes', 'Cotes en direct', 'Argent 100 % fictif', 'PARIS+ · Onglet Paris de votre appli'],
+    vo: ['Pariez sur vos équipes avec des cotes en direct. Argent cent pour cent fictif ! Rendez-vous dans l\'onglet Paris.'],
+    music: { tempo: 136, key: 67, melody: [0, 4, 7, 12, 7, 12, 16, 12], bass: [0, 5, 7, 0], lead: 'sawtooth' },
+  },
+  {
+    brand: 'TENNIS+', dur: 15, bg: 'linear-gradient(135deg, #2a5d9a, #c0ca33)', fg: '#ffffff', icon: '🎾', anim: 'bounce', promo: true,
+    scenes: ['Les plus grands tournois', 'Aces, breaks, tie-breaks', 'Un match toutes les 2 heures', 'TENNIS+ · Sur votre télé'],
+    vo: ['Les plus grands tournois, en direct, sur Tennis plus. Un match toutes les deux heures !'],
+    music: { tempo: 120, key: 62, melody: [0, 7, 12, 7, 0, 7, 12, 14], bass: [0, 5, 7, 5], lead: 'triangle' },
+  },
+  {
+    brand: 'MOTEUR+', dur: 15, bg: 'linear-gradient(135deg, #b71c1c, #212121)', fg: '#ffffff', icon: '🏎️', anim: 'fly', promo: true,
+    scenes: ['Feux rouges...', 'C\'EST PARTI !', 'Un Grand Prix chaque heure', 'MOTEUR+ · Ça va vite !'],
+    vo: ['Feux rouges... C\'est parti ! Un Grand Prix chaque heure, sur Moteur plus !'],
+    music: { tempo: 160, key: 57, melody: [0, 0, 12, 0, 10, 0, 12, 15], bass: [0, 0, 0, 3], lead: 'sawtooth' },
+  },
+  {
+    brand: 'FOOT+ 2', dur: 15, bg: 'linear-gradient(135deg, #004d40, #00897b)', fg: '#ffffff', icon: '🏆', anim: 'spin', promo: true,
+    scenes: ['La Coupe des Champions', 'Les meilleurs clubs', 'Les grandes nations', 'FOOT+ 2 · L\'autre chaîne du foot'],
+    vo: ['La Coupe des Champions et les grands matchs internationaux, en direct sur Foot plus deux !'],
+    music: { tempo: 124, key: 60, melody: [0, 4, 7, 12, 12, 7, 4, 7], bass: [0, 5, 7, 5], lead: 'square' },
+  },
+  {
+    brand: 'SOLARIX', dur: 20, bg: 'linear-gradient(180deg, #ffeb3b, #ff9800)', fg: '#3e2723', icon: '☀️', anim: 'spin',
+    scenes: ['Votre toit vaut de l\'or', 'Panneaux solaires', 'Jusqu\'à 70 % d\'économies', 'SOLARIX · L\'énergie du soleil'],
+    vo: ['Votre toit vaut de l\'or. Avec les panneaux Solarix, jusqu\'à soixante-dix pour cent d\'économies.', 'Solarix, l\'énergie du soleil.'],
+    music: { tempo: 104, key: 62, melody: [0, 2, 4, 7, 9, 7, 4, 2], bass: [0, 5, 7, 5], lead: 'triangle' },
+  },
 ];
 
 export class AdBreak {
@@ -93,7 +153,7 @@ export class AdBreak {
       <div class="ad-icon">${spot.icon}</div>
       <div class="ad-scenes">${spot.scenes.map((s, i) => `<div class="ad-scene" data-i="${i}">${esc(s)}</div>`).join('')}</div>
       <div class="ad-brand">${esc(spot.brand)}</div>
-      <div class="ad-tag">PUBLICITÉ</div>
+      <div class="ad-tag">${spot.promo ? 'BANDE-ANNONCE' : 'PUBLICITÉ'}</div>
     </div>`;
     this.scenes = [...this.box.querySelectorAll('.ad-scene')];
     this.stopMusic = jingle(spot.music, spot.dur);
@@ -106,7 +166,16 @@ export class AdBreak {
     const idx = Math.min(n - 1, Math.floor(local / per));
     this.scenes.forEach((s, i) => s.classList.toggle('on', i === idx));
     const icon = this.box.querySelector('.ad-icon');
-    if (icon) icon.style.transform = `scale(${1 + 0.08 * Math.sin(local * 3)}) rotate(${Math.sin(local * 1.3) * 8}deg)`;
+    if (icon) {
+      const a = spot.anim || 'pulse';
+      const tr = a === 'spin' ? `rotate(${local * 40}deg) scale(${1 + 0.06 * Math.sin(local * 4)})`
+        : a === 'fly' ? `translateX(${Math.sin(local * 0.8) * 30}vw) rotate(${Math.cos(local * 0.8) * 10}deg)`
+        : a === 'bounce' ? `translateY(${-Math.abs(Math.sin(local * 4)) * 60}px)`
+        : a === 'shake' ? `translate(${Math.sin(local * 30) * 4}px, ${Math.cos(local * 27) * 4}px) scale(${1.1 + 0.05 * Math.sin(local * 6)})`
+        : a === 'float' ? `translateY(${Math.sin(local * 1.5) * 18}px)`
+        : `scale(${1 + 0.08 * Math.sin(local * 3)}) rotate(${Math.sin(local * 1.3) * 8}deg)`;
+      icon.style.transform = tr;
+    }
   }
 
   close() {

@@ -260,6 +260,10 @@ export const AD_BRANDS = [
   { name: 'SPORT TV+', sub: 'Tout le sport en direct', bg: '#d50000', fg: '#ffffff' },
   { name: 'AQUAPURA', sub: 'Eau minérale naturelle', bg: '#e1f5fe', fg: '#0277bd' },
   { name: 'KAPPA FIT', sub: 'Équipementier officiel', bg: '#212121', fg: '#ff6d00' },
+  { name: 'GLACE POLAR', sub: 'Le froid qui fait du bien', bg: '#e3f2fd', fg: '#0d47a1' },
+  { name: 'STARLINE AIR', sub: 'Le ciel vous appartient', bg: '#1a237e', fg: '#ffffff' },
+  { name: 'BURGER KAISER', sub: 'Faim de champion', bg: '#d50000', fg: '#fff8e1' },
+  { name: 'MÉGABOX', sub: 'Jouez sans limite', bg: '#00c853', fg: '#111111' },
 ];
 
 function adBoardTexture(offsetIdx) {

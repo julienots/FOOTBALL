@@ -360,3 +360,30 @@ body.full .pbar{display:none}
 .bs-sum{font-size:.85em;margin:6px 0;text-align:center}
 .bs-go{width:100%;font:inherit;font-weight:900;font-size:1.05em;color:#111;background:#ffd600;border:0;border-radius:10px;padding:11px}
 .splash{position:fixed}
+
+/* ---------- TENNIS+ ---------- */
+.tn-bug{position:absolute;top:calc(.8em + env(safe-area-inset-top));left:calc(1em + env(safe-area-inset-left));background:var(--glass2);border-radius:.35em;overflow:hidden;font-weight:800;filter:drop-shadow(0 .2em .5em rgba(0,0,0,.45));z-index:11}
+.tn-bug table{border-collapse:collapse}
+.tn-bug td{padding:.2em .45em;font-variant-numeric:tabular-nums;text-align:center}
+.tn-bug .tn-nm{text-align:left;min-width:7em;letter-spacing:.03em}
+.tn-bug .tn-sv{color:#d4f53c;width:.8em;padding-right:0}
+.tn-bug .tn-cur{background:rgba(255,255,255,.12)}
+.tn-bug .tn-pt{background:#d4f53c;color:#111;min-width:2em}
+.tn-tag{background:#d50000;font-size:.65em;text-align:center;padding:.1em}
+.tn-flag{display:inline-block;width:1.1em;height:.75em;border-radius:.1em;vertical-align:-.05em}
+.tn-ava{width:3.2em;height:3.2em;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.6em;font-weight:900;color:#111;box-shadow:0 0 0 .15em #fff}
+/* ---------- MOTEUR+ ---------- */
+.rc-tower{position:absolute;top:calc(.8em + env(safe-area-inset-top));left:calc(1em + env(safe-area-inset-left));background:var(--glass2);border-radius:.35em;overflow:hidden;font-weight:800;font-size:.82em;min-width:11em;z-index:11}
+.rc-lap{background:#e53935;text-align:center;padding:.2em;letter-spacing:.08em}
+.rc-r{display:flex;align-items:center;gap:.4em;padding:.12em .5em;border-top:1px solid rgba(255,255,255,.06)}
+.rc-r.f{background:rgba(255,214,0,.18)}
+.rc-r b{width:1.4em;text-align:right}
+.rc-r i{width:.25em;height:1em;border-radius:.1em}
+.rc-r span{flex:1;letter-spacing:.05em}
+.rc-r em{font-style:normal;opacity:.8;font-size:.9em;font-variant-numeric:tabular-nums}
+.rc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.2em .8em;font-size:.82em}
+.rc-g{display:flex;align-items:center;gap:.4em;white-space:nowrap;overflow:hidden}
+.rc-g b{width:1.5em;text-align:right;color:#ffd600}
+.rc-g i{width:.3em;height:1em}
+.rc-g small{opacity:.55;margin-left:auto}
+body.portrait .rc-tower,body.portrait .tn-bug{font-size:.7em}
