@@ -1,5 +1,6 @@
 // Chaîne BASKET+ : un match de Ligue Pro toutes les heures.
 import { BasketMatch } from '../basket/engine.js';
+import { catchUp, budget } from '../core/catchup.js';
 import { BasketView } from '../basket/view.js';
 import { getBasketLeague } from '../basket/data.js';
 import { EPOCH } from '../data/season.js';
@@ -62,7 +63,7 @@ export class BasketChannel {
     if (this.kits[1].shirt !== '#f5f5f5') this.kits[1].num = m.away.colors[1];
     const e = new BasketMatch({ home: m.home, away: m.away, seed: m.seed });
     const target = (now - s.tip) / 1000;
-    if (target > 0) e.syncTo(target);
+    this.catching = target > 0; // rattrapage par tranches dans update()
     e.pullEvents();
     this.engine = e;
     this.introDone = false;
@@ -74,6 +75,7 @@ export class BasketChannel {
     this.view = new BasketView(this.app.renderer, { home: this.m.home, away: this.m.away }, this.app.settings.quality);
     this.view.setRoster(this.engine, this.kits);
     this.app.resizeView(this.view);
+    this.app.warmView(this.view);
   }
 
   teardown() {
@@ -96,7 +98,7 @@ export class BasketChannel {
     if (this.sound) this.sound.fadeOut();
     this.ads.close();
     voice.stop();
-    if (this.view) { this.view.dispose(); this.view = null; }
+    this.app.parkView(this);
     this.app.overlay.hideAll();
   }
 
@@ -105,6 +107,11 @@ export class BasketChannel {
     if (this.slot !== s.slot) this.prepare(now);
     const E = this.engine;
     const target = (now - s.tip) / 1000;
+    if (this.catching) {
+      this.catching = !catchUp(E, target, budget(this.visible));
+      E.pullEvents();
+      if (this.catching) { if (this.visible) this.app.showCatchUp(this, E.wall / target); return; }
+    }
     if (target > 0) E.syncTo(target, 600);
     const events = E.pullEvents();
     if (!this.visible) return;

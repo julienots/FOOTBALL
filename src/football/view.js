@@ -12,7 +12,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { roomEnv, disposeScene } from '../core/gfx.js';
 
 // Étalonnage façon diffusion TV : contraste, saturation, vignettage, grain
 const GradeShader = {
@@ -71,10 +71,8 @@ export class FootballView {
       scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
     }
     // éclairage d'ambiance par image (reflets réalistes sur les matières)
-    const pm = new THREE.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = roomEnv(renderer);
     scene.environmentIntensity = night ? 0.15 : 0.3;
-    pm.dispose();
     // lumières
     const hemi = new THREE.HemisphereLight(night ? 0x8899cc : 0xcfe6ff, 0x34502a, night ? 0.45 : 0.55);
     scene.add(hemi);
@@ -360,11 +358,7 @@ export class FootballView {
 
   dispose() {
     if (this.composer) { this.composer.renderTarget1.dispose(); this.composer.renderTarget2.dispose(); this.composer.dispose?.(); }
-    if (this.scene.environment) this.scene.environment.dispose();
-    this.scene.traverse(o => {
-      if (o.geometry) o.geometry.dispose();
-      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
-    });
+    disposeScene(this.scene);
   }
 }
 

@@ -1,5 +1,6 @@
 // Chaîne TENNIS+ : un match du circuit toutes les deux heures.
 import { TennisMatch } from '../tennis/engine.js';
+import { catchUp, budget } from '../core/catchup.js';
 import { TennisView } from '../tennis/view.js';
 import { getTennisTour, TOURNAMENTS, ROUNDS } from '../tennis/data.js';
 import { EPOCH } from '../data/season.js';
@@ -54,7 +55,7 @@ export class TennisChannel {
     this.m = this.matchup(s.slot);
     const e = new TennisMatch({ p1: this.m.p1, p2: this.m.p2, seed: this.m.seed });
     const target = (now - s.play) / 1000;
-    if (target > 0) e.syncTo(target);
+    this.catching = target > 0; // rattrapage par tranches dans update()
     e.pullEvents();
     this.engine = e;
     this.introDone = false;
@@ -67,6 +68,7 @@ export class TennisChannel {
     this.view = new TennisView(this.app.renderer, { tournament: this.m.tournament, night: h >= 20 || h < 7 }, this.app.settings.quality);
     this.view.setRoster(this.engine);
     this.app.resizeView(this.view);
+    this.app.warmView(this.view);
   }
 
   enter() {
@@ -82,7 +84,7 @@ export class TennisChannel {
     if (this.sound) this.sound.fadeOut();
     this.ads.close(); voice.stop();
     this.bug.classList.add('hidden');
-    if (this.view) { this.view.dispose(); this.view = null; }
+    this.app.parkView(this);
     this.app.overlay.hideAll();
   }
 
@@ -91,6 +93,11 @@ export class TennisChannel {
     if (this.slot !== s.slot) this.prepare(now);
     const E = this.engine;
     const target = (now - s.play) / 1000;
+    if (this.catching) {
+      this.catching = !catchUp(E, target, budget(this.visible));
+      E.pullEvents();
+      if (this.catching) { if (this.visible) this.app.showCatchUp(this, E.wall / target); return; }
+    }
     if (target > 0) E.syncTo(target, 400);
     const events = E.pullEvents();
     if (!this.visible) return;

@@ -1,5 +1,6 @@
 // Salle de basket 3D : parquet, paniers, tribunes, écran géant suspendu.
 import * as THREE from 'three';
+import { disposeScene } from '../core/gfx.js';
 import { Players } from '../football/players.js';
 import { canvasTex } from '../football/stadium.js';
 import { ENT, SNAP_LEN } from '../football/engine.js';
@@ -52,7 +53,7 @@ function courtTexture(home) {
     g.fillStyle = '#fff'; g.font = `bold ${Math.round(0.7 * sy)}px Arial`;
     g.fillText('BASKET+ LIGUE PRO', X(0), Y(8.05));
     g.fillText(home.name.toUpperCase(), X(0), Y(-8.05));
-  }, { aniso: 8 });
+  }, { aniso: 8, cache: 'basket-' + home.name });
 }
 
 function hoop(scene, side) {
@@ -182,10 +183,7 @@ export class BasketView {
           shirt: kit.shirt, shorts: kit.shirt, socks: '#ffffff', skin: d.look.skin, hair: d.look.hairColor, hairStyle: d.look.hairStyle,
           height: d.height, number: d.number, numColor: kit.num, gloves: null, boot: '#f5f5f5', tank: true,
         });
-        // débardeur : bras nus
-        const skin = this.players.meshes.forearm.getColorAt(idx * 2, new THREE.Color());
-        this.players.meshes.sleeve.setColorAt(idx * 2, skin); this.players.meshes.sleeve.setColorAt(idx * 2 + 1, skin);
-        this.players.meshes.sleeve.instanceColor.needsUpdate = true;
+        // débardeur (bras nus) : géré par setMeta via tank: true
       }
     }
     const ref = { shirt: '#9e9e9e', shorts: '#111111', socks: '#111111', skin: 0.4, hair: '#222', hairStyle: 0, height: 1.82, number: 0, numColor: '#9e9e9e', official: true, sponsor: -1 };
@@ -246,6 +244,6 @@ export class BasketView {
   }
 
   dispose() {
-    this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); });
+    disposeScene(this.scene);
   }
 }

@@ -2,7 +2,7 @@
 // sportif) et grand plateau du jeu télévisé, avec présentateurs et candidats
 // animés (mêmes personnages réalistes que les sportifs, en costume).
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { roomEnv, disposeScene } from '../core/gfx.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -117,9 +117,7 @@ export class StudioView {
     this.opts = opts;
     const scene = (this.scene = new THREE.Scene());
     scene.background = new THREE.Color(0x02030a);
-    const pm = new THREE.PMREMGenerator(renderer);
-    this.env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    pm.dispose();
+    this.env = roomEnv(renderer);
     scene.environment = this.env;
     scene.environmentIntensity = 0.35;
     this.camera = new THREE.PerspectiveCamera(36, 16 / 9, 0.1, 200);
@@ -424,8 +422,7 @@ export class StudioView {
   }
 
   dispose() {
-    this.env.dispose();
     if (this.composer) { this.composer.renderTarget1.dispose(); this.composer.renderTarget2.dispose(); }
-    this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); });
+    disposeScene(this.scene);
   }
 }

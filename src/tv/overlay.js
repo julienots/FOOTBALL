@@ -57,6 +57,10 @@ export class Overlay {
   }
 
   wallClock(date) {
+    // appelée à chaque image : on ne reformate (et ne touche au DOM) qu'au changement de minute
+    const m = Math.floor(date.getTime() / 60000);
+    if (m === this.clockMin) return;
+    this.clockMin = m;
     this.clockEl.textContent = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   }
 

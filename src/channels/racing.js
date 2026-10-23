@@ -1,5 +1,6 @@
 // Chaîne MOTEUR+ : un Grand Prix toutes les heures.
 import { RaceSim } from '../racing/engine.js';
+import { catchUp, budget } from '../core/catchup.js';
 import { RacingView } from '../racing/view.js';
 import { getRacing, CIRCUITS } from '../racing/data.js';
 import { EPOCH } from '../data/season.js';
@@ -44,7 +45,7 @@ export class RacingChannel {
     this.slot = s.slot; this.s = s;
     this.sim = new RaceSim({ drivers: getRacing().drivers, seed: 'gp-' + s.slot });
     const target = (now - s.go) / 1000;
-    if (target > 0) this.sim.syncTo(target);
+    this.catching = target > 0; // rattrapage par tranches dans update()
     this.sim.pullEvents();
     this.introDone = false;
     if (this.visible) this.buildView();
@@ -54,6 +55,7 @@ export class RacingChannel {
     if (this.view || !this.sim) return;
     this.view = new RacingView(this.app.renderer, { circuit: this.circuit(this.slot), drivers: getRacing().drivers }, this.app.settings.quality);
     this.app.resizeView(this.view);
+    this.app.warmView(this.view);
   }
 
   enter() {
@@ -71,7 +73,7 @@ export class RacingChannel {
     if (this.crowd) this.crowd.fadeOut();
     this.ads.close(); voice.stop();
     this.tower.classList.add('hidden');
-    if (this.view) { this.view.dispose(); this.view = null; }
+    this.app.parkView(this);
     this.app.overlay.hideAll();
   }
 
@@ -92,6 +94,11 @@ export class RacingChannel {
     if (this.slot !== s.slot) this.prepare(now);
     const R = this.sim;
     const target = (now - s.go) / 1000;
+    if (this.catching) {
+      this.catching = !catchUp(R, target, budget(this.visible));
+      R.pullEvents();
+      if (this.catching) { if (this.visible) this.app.showCatchUp(this, R.wall / target); return; }
+    }
     if (target > 0) R.syncTo(target, 600);
     const events = R.pullEvents();
     if (!this.visible) return;

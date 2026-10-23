@@ -17,9 +17,12 @@ import { voice } from './audio/voice.js';
 import { BetCenter } from './bet/bets.js';
 import { neural } from './tts/neural.js';
 import { preloadBodies } from './football/body.js';
+import { getStage } from './tv/products.js';
+import { SPOTS } from './tv/ads.js';
 
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const params = new URLSearchParams(location.search);
+const setHtml = (elm, html) => { if (elm._html !== html || elm.innerHTML === '') { elm._html = html; elm.innerHTML = html; } };
 
 function loadSettings() {
   const def = { speed: 1, quality: /Android|iPhone|iPad/i.test(navigator.userAgent) ? 'medium' : 'high', volume: 0.9, commentary: true, channel: 0 };
@@ -86,6 +89,40 @@ class App {
   isFull() { return this.full || (innerWidth > innerHeight * 1.15); }
   resizeView(v) { const r = this.player.getBoundingClientRect(); v.resize(Math.max(1, r.width), Math.max(1, r.height)); }
   canvasVisible(on) { this.canvas.style.visibility = on ? 'visible' : 'hidden'; }
+  // Compile les shaders d'une nouvelle image en tâche de fond (sans figer l'appli) ;
+  // tant que ce n'est pas prêt, on affiche l'écran de chargement au lieu d'une image figée.
+  warmView(view) {
+    if (!view || view.warm) return;
+    view.warm = true;
+    view.ready = false;
+    const render = view.render.bind(view);
+    view.render = (...a) => {
+      if (!view.ready) {
+        this.canvasVisible(false);
+        const ch = this.current;
+        this.showLoader(`<div class="ld-chan">${esc(ch ? ch.name : '')}</div><div class="ld-txt">Réglage de l'image…</div>`);
+        return;
+      }
+      if (!view.shown) { view.shown = true; this.canvasVisible(true); this.hideLoader(); }
+      return render(...a);
+    };
+    const done = () => { view.ready = true; };
+    try {
+      if (view.scene && view.camera && this.renderer.compileAsync) this.renderer.compileAsync(view.scene, view.camera).then(done, done);
+      else done();
+    } catch (e) { done(); }
+  }
+  // Garde l'image de la chaîne quittée (retour instantané, shaders déjà prêts) ;
+  // seule la dernière chaîne quittée est conservée pour ménager la mémoire.
+  parkView(ch) {
+    const old = this.parked;
+    this.parked = ch;
+    if (old && old !== ch && old !== this.current && old.view) { old.view.dispose(); old.view = null; }
+  }
+  showCatchUp(ch, progress) {
+    this.canvasVisible(false);
+    this.showLoader(`<div class="ld-chan">${esc(ch.name)}</div><div class="ld-txt">Connexion au direct…</div><div class="ld-bar"><i style="width:${Math.round(Math.min(0.99, progress || 0) * 100)}%"></i></div>`);
+  }
   showLoader(html) { this.loader.innerHTML = html; this.loader.classList.remove('hidden'); }
   hideLoader() { this.loader.classList.add('hidden'); }
 
@@ -249,6 +286,8 @@ class App {
       } catch (e) { /* facultatif */ }
     }
     await Promise.race([this.bodiesReady, new Promise(r => setTimeout(r, 4000))]);
+    // studio 3D des pubs préparé à l'allumage plutôt qu'en pleine coupure (évite un gel à la 1re pub)
+    try { const st = getStage(); if (st) { st.setSpot(SPOTS[0]); st.resize(64, 36); st.render(0, 0); } } catch (e) { /* facultatif */ }
     const start = params.get('ch') ? +params.get('ch') - 1 : this.settings.channel || 0;
     this.tune(start, true);
     this.showTab(params.get('tab') || 'chaines');
@@ -264,6 +303,7 @@ class App {
     if (!first) { zap(); this.static.classList.remove('hidden'); setTimeout(() => this.static.classList.add('hidden'), 350); }
     else sting('ident');
     this.current = ch;
+    if (this.parked === ch) this.parked = null;
     this.settings.channel = i; this.save();
     ch.enter();
     this.showOSD(ch);
@@ -335,14 +375,15 @@ class App {
     this._epgCache = out;
   }
 
+  // rafraîchies toutes les 2 s : on ne touche au DOM que si le contenu a changé (évite un à-coup de mise en page)
   renderChannels() {
     if (this.tab !== 'chaines') return;
-    this.hubBody.innerHTML = `<div class="hub-h">Vos chaînes</div>${this.channelCards()}
-      <div class="hub-tip">Touchez <b>⛶</b> sur l'image pour passer en grand écran. Dans le grand écran, touchez l'image pour la télécommande.</div>`;
+    setHtml(this.hubBody, `<div class="hub-h">Vos chaînes</div>${this.channelCards()}
+      <div class="hub-tip">Touchez <b>⛶</b> sur l'image pour passer en grand écran. Dans le grand écran, touchez l'image pour la télécommande.</div>`);
   }
 
   renderChList() {
-    this.chList.innerHTML = `<div class="hub-h">Chaînes</div>${this.channelCards()}`;
+    setHtml(this.chList, `<div class="hub-h">Chaînes</div>${this.channelCards()}`);
   }
 
   async renderGuide() {

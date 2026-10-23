@@ -2,7 +2,7 @@
 // tribunes, joueurs avec raquettes, caméra de télévision.
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { roomEnv, disposeScene } from '../core/gfx.js';
 import { Players } from '../football/players.js';
 import { canvasTex } from '../football/stadium.js';
 import { ENT, SNAP_LEN } from '../football/engine.js';
@@ -26,7 +26,7 @@ function courtTex(name) {
     g.fillStyle = 'rgba(255,255,255,0.85)'; g.font = `bold ${Math.round(1.3 * sy)}px Arial`; g.textAlign = 'center';
     g.save(); g.translate(X(-TL - 3.2), Y(0)); g.rotate(Math.PI / 2); g.fillText(name.toUpperCase(), 0, 0); g.restore();
     g.save(); g.translate(X(TL + 3.2), Y(0)); g.rotate(-Math.PI / 2); g.fillText(name.toUpperCase(), 0, 0); g.restore();
-  }, { aniso: 8 });
+  }, { aniso: 8, cache: 'court-' + name });
 }
 
 export class TennisView {
@@ -41,8 +41,7 @@ export class TennisView {
       u.sunPosition.value.setFromSphericalCoords(1, THREE.MathUtils.degToRad(45), THREE.MathUtils.degToRad(150));
       scene.add(sky);
     }
-    const pm = new THREE.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.3; pm.dispose();
+    scene.environment = roomEnv(renderer); scene.environmentIntensity = 0.3;
     scene.add(new THREE.HemisphereLight(0xdfefff, 0x3a4a3a, night ? 0.5 : 0.6));
     const key = new THREE.DirectionalLight(0xfff3e0, night ? 2.2 : 2.6);
     key.position.set(-20, 50, 25); key.castShadow = quality !== 'low';
@@ -176,7 +175,6 @@ export class TennisView {
   }
 
   dispose() {
-    if (this.scene.environment) this.scene.environment.dispose();
-    this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); });
+    disposeScene(this.scene);
   }
 }

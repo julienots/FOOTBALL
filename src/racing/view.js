@@ -2,7 +2,7 @@
 // portique de départ, monoplaces aux couleurs des écuries, caméras TV.
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { roomEnv, disposeScene } from '../core/gfx.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { canvasTex } from '../football/stadium.js';
 import { getTrack, RDT } from './engine.js';
@@ -13,13 +13,14 @@ const W = 7; // demi-largeur de piste
 function ribbon(S, off0, off1, y, uvScale, closed = true) {
   const pos = [], uv = [], idx = [];
   const N = S.length;
+  const last = closed ? N : N - 1; // ruban ouvert : pas de retour au premier point
   let acc = 0;
-  for (let i = 0; i <= N; i++) {
+  for (let i = 0; i <= last; i++) {
     const p = S[i % N];
     pos.push(p.x + p.nx * off0, y, p.z + p.nz * off0, p.x + p.nx * off1, y, p.z + p.nz * off1);
     uv.push(0, acc / uvScale, 1, acc / uvScale);
     acc += 2;
-    if (i < N) idx.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
+    if (i < last) idx.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -75,8 +76,7 @@ export class RacingView {
     u.sunPosition.value.setFromSphericalCoords(1, THREE.MathUtils.degToRad(55), THREE.MathUtils.degToRad(120));
     scene.add(sky);
     scene.fog = new THREE.Fog(0xb8cfe0, 400, 1600);
-    const pm = new THREE.PMREMGenerator(renderer);
-    scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.5; pm.dispose();
+    scene.environment = roomEnv(renderer); scene.environmentIntensity = 0.5;
     scene.add(new THREE.HemisphereLight(0xdfefff, 0x445533, 0.7));
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
     sun.position.set(120, 200, 80); sun.castShadow = quality !== 'low';
@@ -111,7 +111,6 @@ export class RacingView {
         const side = S[Math.floor((i + j) / 2)].k > 0 ? 1 : -1;
         for (const sd of [side, -side]) {
           const geo = ribbon(part, sd > 0 ? W : -W - 1.2, sd > 0 ? W + 1.2 : -W, 0.03, 6, false);
-          geo.index.array = geo.index.array.slice(0, (part.length - 1) * 6);
           const m = new THREE.Mesh(geo, kerbMat); m.receiveShadow = true; scene.add(m);
         }
       }
@@ -270,7 +269,6 @@ export class RacingView {
   }
 
   dispose() {
-    if (this.scene.environment) this.scene.environment.dispose();
-    this.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); });
+    disposeScene(this.scene);
   }
 }

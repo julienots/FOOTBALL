@@ -178,7 +178,7 @@ export class GeneralChannel {
     this.root.classList.add('hidden');
     this.ads.close(); voice.stop();
     if (this.sound) this.sound.fadeOut();
-    if (this.view) { this.view.dispose(); this.view = null; }
+    this.app.parkView(this);
     if (this.stopMusic) { this.stopMusic(); this.stopMusic = null; }
     this.full.innerHTML = '';
     this.app.overlay.hideAll();
@@ -192,6 +192,7 @@ export class GeneralChannel {
     this.view = new StudioView(this.app.renderer, mode, this.app.settings.quality, { title: p.kind === 'mag' ? 'LE MAG DU SPORT' : p.title, host: HOST, cands: p.kind === 'quiz' ? this.data.cands : [] });
     this.viewMode = mode; this.viewProg = p.start;
     this.app.resizeView(this.view);
+    this.app.warmView(this.view);
     this.wallKey = null;
     return this.view;
   }

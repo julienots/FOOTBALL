@@ -5,11 +5,20 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { HL, HW, GOAL_HW, GOAL_H } from './engine.js';
 import { RNG } from '../core/rng.js';
 
+// opts.cache : clé sous laquelle le dessin est gardé (dessins lourds identiques d'un zapping à l'autre)
+// opts.read : le dessin relit ses pixels (getImageData), canevas en mémoire vive pour que ce soit rapide
+const drawn = new Map();
 export function canvasTex(w, h, draw, opts = {}) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const g = c.getContext('2d');
-  draw(g, w, h);
+  let c = opts.cache && drawn.get(opts.cache);
+  let g;
+  if (c) g = c.getContext('2d');
+  else {
+    c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    g = c.getContext('2d', opts.read ? { willReadFrequently: true } : undefined);
+    draw(g, w, h);
+    if (opts.cache) drawn.set(opts.cache, c);
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = opts.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace;
   t.anisotropy = opts.aniso || 4;
@@ -33,7 +42,7 @@ function grassNormal(rng) {
       img.data[i] = 128 - dx * 200; img.data[i + 1] = 128 - dy * 200; img.data[i + 2] = 255; img.data[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
-  }, { linear: true, repeat: [70, 45], aniso: 8 });
+  }, { linear: true, repeat: [70, 45], aniso: 8, cache: 'grass-normal' });
 }
 
 function grassTexture(rng) {
@@ -69,7 +78,7 @@ function grassTexture(rng) {
       grd.addColorStop(0, 'rgba(110,95,50,0.28)'); grd.addColorStop(1, 'rgba(110,95,50,0)');
       g.fillStyle = grd; g.fillRect(cx - r, cy - r, 2 * r, 2 * r);
     }
-  }, { aniso: 8 });
+  }, { aniso: 8, read: true, cache: 'grass' });
 }
 
 function lineGeometry() {
@@ -311,8 +320,8 @@ export class Stadium {
     ground.rotation.x = -Math.PI / 2; ground.position.y = -0.05; ground.receiveShadow = true;
     G.add(ground);
     // pelouse
-    const grass = grassTexture(this.rng);
-    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(HL * 2 + 14, HW * 2 + 14), new THREE.MeshStandardMaterial({ map: grass, roughness: 0.88, metalness: 0, normalMap: quality === 'low' ? null : grassNormal(this.rng), normalScale: new THREE.Vector2(0.4, 0.4) }));
+    const grass = grassTexture(new RNG('pelouse'));
+    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(HL * 2 + 14, HW * 2 + 14), new THREE.MeshStandardMaterial({ map: grass, roughness: 0.88, metalness: 0, normalMap: quality === 'low' ? null : grassNormal(new RNG('pelouse-relief')), normalScale: new THREE.Vector2(0.4, 0.4) }));
     pitch.rotation.x = -Math.PI / 2; pitch.receiveShadow = true;
     G.add(pitch);
     // piste autour (zone technique)

@@ -6,6 +6,7 @@ import { Commentary } from '../football/commentary.js';
 import { kitsFor } from '../data/world.js';
 import { footSlotAt, getSeason, COMP, SPEEDS } from '../data/season.js';
 import { fullSim, cachedResult, saveResult } from '../core/sim-service.js';
+import { catchUp, budget } from '../core/catchup.js';
 import { AdBreak, pickSpots, breakLength } from '../tv/ads.js';
 import { StadiumSound, whistle, kick, goalHorn, busGain, audioCtx } from '../audio/audio.js';
 import { voice } from '../audio/voice.js';
@@ -97,14 +98,12 @@ export class FootChannel {
     this.ctx = ctx;
     // rattrapage du direct (simulation accélérée depuis le coup d'envoi)
     const target = (this.app.now() - s.kickoff) / 1000;
+    // par petites tranches, pour ne pas faire saccader la chaîne regardée pendant ce temps
     if (target > 0) {
-      let steps = 0;
-      while (!engine.syncTo((this.app.now() - s.kickoff) / 1000, 2500)) {
-        steps += 2500;
+      while (!catchUp(engine, (this.app.now() - s.kickoff) / 1000, budget(this.visible))) {
         this.loading.progress = Math.min(0.99, engine.wall / Math.max(1, (this.app.now() - s.kickoff) / 1000));
-        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, this.visible ? 0 : 16));
         if (token !== this.token) return;
-        if (engine.wall >= (this.app.now() - s.kickoff) / 1000 - 0.1) break;
       }
     }
     engine.pullEvents();
@@ -124,6 +123,7 @@ export class FootChannel {
     this.view = new FootballView(this.app.renderer, { home: info.home, away: info.away, kits: this.kits, night: info.night, sunset: false, seed: info.seed }, this.app.settings.quality);
     this.view.setRoster(this.engine);
     this.app.resizeView(this.view);
+    this.app.warmView(this.view);
   }
 
   teardown() {
@@ -152,7 +152,7 @@ export class FootChannel {
     voice.clear('foot');
     voice.clear('ad');
     voice.stop();
-    if (this.view) { this.view.dispose(); this.view = null; }
+    this.app.parkView(this);
     this.app.overlay.hideAll();
   }
 
