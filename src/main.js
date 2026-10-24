@@ -12,7 +12,7 @@ import { Foot2Channel } from './channels/foot2.js';
 import { TennisChannel } from './channels/tennis.js';
 import { RacingChannel } from './channels/racing.js';
 import { GeneralChannel } from './channels/general.js';
-import { initAudio, zap, setMasterVolume, sting } from './audio/audio.js';
+import { initAudio, zap, setMasterVolume, sting, resumeAudio } from './audio/audio.js';
 import { voice } from './audio/voice.js';
 import { BetCenter } from './bet/bets.js';
 import { neural } from './tts/neural.js';
@@ -196,6 +196,8 @@ class App {
     // gestes : glisser pour zapper, toucher pour la télécommande
     let y0 = null, x0 = null, t0 = 0;
     this.tvRoot.addEventListener('pointerdown', (e) => { y0 = e.clientY; x0 = e.clientX; t0 = performance.now(); });
+    // tout contact relance le son s'il a été suspendu par le système
+    addEventListener('pointerdown', () => { if (this.on) resumeAudio(); }, { capture: true });
     this.tvRoot.addEventListener('pointerup', (e) => {
       if (!this.on || y0 == null) return;
       const dy = e.clientY - y0, dx = e.clientX - x0; y0 = null;
@@ -214,7 +216,7 @@ class App {
       if (e.key === 'Escape' && this.full) this.setFull(false);
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { voice.stop(); setMasterVolume(0); } else if (this.on) setMasterVolume(this.muted ? 0 : this.settings.volume);
+      if (document.hidden) { voice.stop(); setMasterVolume(0); } else if (this.on) { resumeAudio(); setMasterVolume(this.muted ? 0 : this.settings.volume); }
     });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && this.full && !Capacitor.isNativePlatform()) this.setFull(false); });
   }

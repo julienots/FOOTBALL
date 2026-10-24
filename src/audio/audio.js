@@ -13,6 +13,9 @@ export function initAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
   ctx = new AC({ latencyHint: 'playback' });
+  // Android peut suspendre/interrompre le son (notification, appel, autre appli) :
+  // on le relance dès que l'appli est au premier plan
+  ctx.onstatechange = () => { if (ctx.state !== 'running' && ctx.state !== 'closed' && !document.hidden) resumeAudio(); };
   master = ctx.createGain();
   master.gain.value = 0.9;
   const comp = ctx.createDynamicsCompressor();
@@ -26,7 +29,14 @@ export function initAudio() {
   for (const name of ['stadium', 'ads', 'fx', 'voice']) {
     const g = ctx.createGain(); g.gain.value = 1; g.connect(master); buses[name] = g;
   }
+  // calculés à l'allumage plutôt qu'au premier but
+  noise(); applauseBuf(); burstBuf();
   return ctx;
+}
+
+export function resumeAudio() {
+  if (!ctx || ctx.state === 'running' || ctx.state === 'closed') return;
+  try { ctx.resume().catch(() => {}); } catch (e) { /* rien */ }
 }
 
 export function setMasterVolume(v) { if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.05); }
@@ -78,8 +88,14 @@ export class StadiumSound {
     this.out.gain.value = 0;
     this.out.connect(buses.stadium);
     this.out.connect(buses.reverb);
-    // couche "rumeur" (murmure de 50 000 personnes)
-    this.layers = [];
+    this.build();
+    this.level = 0.3;
+    this.nextChant = ctx.currentTime + 6;
+    this.chanting = false;
+  }
+
+  // couche "rumeur" (murmure de 50 000 personnes)
+  build() {
     const mk = (type, freq, q, gain) => {
       const src = noiseSource();
       const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
@@ -93,26 +109,49 @@ export class StadiumSound {
     this.roar = mk('bandpass', 900, 0.5, 0);
     this.boo = mk('bandpass', 260, 2.0, 0);
     // modulation lente pour une rumeur vivante
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.13;
+    this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 0.13;
     const lg = ctx.createGain(); lg.gain.value = 0.12;
-    lfo.connect(lg).connect(this.murmur.g.gain); lfo.start();
-    this.level = 0.3;
-    this.nextChant = ctx.currentTime + 6;
-    this.chanting = false;
+    this.lfo.connect(lg).connect(this.murmur.g.gain); this.lfo.start();
+    this.asleep = false;
   }
 
-  fadeIn(t = 1.5) { this.out.gain.setTargetAtTime(0.9, ctx.currentTime, t / 3); }
-  fadeOut(t = 0.6) { this.out.gain.setTargetAtTime(0, ctx.currentTime, t / 3); }
-  setVolume(v) { this.out.gain.setTargetAtTime(v, ctx.currentTime, 0.2); }
+  // Chaîne quittée : on arrête vraiment les sources (sinon chaque chaîne déjà visitée
+  // continue de calculer sa foule en silence et le son finit par décrocher sur téléphone)
+  sleep() {
+    if (this.asleep) return;
+    this.asleep = true;
+    for (const l of [this.murmur, this.chatter, this.roar, this.boo]) { try { l.src.stop(); } catch (e) { /* déjà arrêtée */ } l.src.disconnect(); l.g.disconnect(); }
+    try { this.lfo.stop(); } catch (e) { /* déjà arrêté */ }
+    this.lfo.disconnect();
+  }
+
+  fadeIn(t = 1.5) {
+    clearTimeout(this.sleepT);
+    if (this.asleep) this.build();
+    this.vol = undefined;
+    this.out.gain.setTargetAtTime(0.9, ctx.currentTime, t / 3);
+  }
+  fadeOut(t = 0.6) {
+    this.vol = undefined;
+    this.out.gain.setTargetAtTime(0, ctx.currentTime, t / 3);
+    clearTimeout(this.sleepT);
+    this.sleepT = setTimeout(() => this.sleep(), t * 1000 + 1500);
+  }
+  setVolume(v) { if (Math.abs(v - (this.vol ?? -1)) < 1e-3) return; this.vol = v; this.out.gain.setTargetAtTime(v, ctx.currentTime, 0.2); }
 
   // excitation 0..1 (proximité du but, action chaude)
   update(exc, dt) {
+    if (this.asleep) return;
     const now = ctx.currentTime;
     this.level += (exc - this.level) * Math.min(1, dt * 1.5);
     const L = this.level;
-    this.murmur.g.gain.setTargetAtTime(0.45 + L * 0.45, now, 0.4);
-    this.chatter.g.gain.setTargetAtTime(0.12 + L * 0.25, now, 0.4);
-    this.murmur.f.frequency.setTargetAtTime(480 + L * 260, now, 0.5);
+    // automatisations ~10 fois par seconde (et non à chaque image)
+    if (now - (this.autoT || 0) > 0.1) {
+      this.autoT = now;
+      this.murmur.g.gain.setTargetAtTime(0.45 + L * 0.45, now, 0.4);
+      this.chatter.g.gain.setTargetAtTime(0.12 + L * 0.25, now, 0.4);
+      this.murmur.f.frequency.setTargetAtTime(480 + L * 260, now, 0.5);
+    }
     if (!this.chanting && now > this.nextChant && L < 0.7) {
       this.chant();
       this.nextChant = now + 28 + Math.random() * 40;
@@ -120,6 +159,7 @@ export class StadiumSound {
   }
 
   surge(amount = 1, dur = 2.5) {
+    if (this.asleep) return;
     const now = ctx.currentTime;
     const g = this.roar.g.gain;
     g.cancelScheduledValues(now);
@@ -133,6 +173,7 @@ export class StadiumSound {
 
   // "Ohhhh" sur une occasion manquée
   ohh() {
+    if (this.asleep) return;
     const now = ctx.currentTime;
     const src = noiseSource();
     const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.Q.value = 4;
@@ -146,6 +187,7 @@ export class StadiumSound {
   }
 
   booWhistle(dur = 2.5) {
+    if (this.asleep) return;
     const now = ctx.currentTime;
     const g = this.boo.g.gain;
     g.cancelScheduledValues(now); g.setValueAtTime(g.value, now);
@@ -162,13 +204,17 @@ export class StadiumSound {
     }
   }
 
+  // un seul son pré-calculé (avant : jusqu'à 400 sources audio créées d'un coup, d'où des coupures)
   applause(dur = 4, intensity = 1) {
+    if (this.asleep) return;
     const now = ctx.currentTime;
-    const n = Math.floor(40 * dur * intensity);
-    for (let i = 0; i < n; i++) {
-      const t = now + Math.random() * dur;
-      clap(this.out, t, 0.05 + Math.random() * 0.06 * intensity, 1200 + Math.random() * 1800);
-    }
+    const src = ctx.createBufferSource(); src.buffer = applauseBuf(); src.loop = true;
+    src.playbackRate.value = 0.95 + Math.random() * 0.1;
+    const g = ctx.createGain(); const v = 0.9 * intensity;
+    g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(v, now + 0.25);
+    g.gain.setValueAtTime(v, now + dur * 0.6); g.gain.linearRampToValueAtTime(0, now + dur);
+    src.connect(g).connect(this.out);
+    src.start(now, Math.random() * 2); src.stop(now + dur + 0.1);
   }
 
   // Chant des supporters : chœur synthétisé + claps + tambour
@@ -181,6 +227,7 @@ export class StadiumSound {
       // tapes rythmiques type "clap-clap-clap"
       { tempo: 110, claps: true, notes: [[0, 1], [0, 1], [0, 2], [0, 1], [0, 1], [0, 2]] },
     ];
+    if (this.asleep) return 0;
     const m = melodies[kind ?? Math.floor(Math.random() * melodies.length)];
     const beat = 60 / m.tempo;
     const reps = 2 + Math.floor(Math.random() * 2);
@@ -189,30 +236,61 @@ export class StadiumSound {
     const total = m.notes.reduce((a, n) => a + n[1], 0) * beat * reps;
     setTimeout(() => (this.chanting = false), total * 1000 + 300);
     this.chantLevel = 1;
-    for (let r = 0; r < reps; r++) {
-      for (const [note, len] of m.notes) {
-        const d = len * beat;
-        if (m.claps) {
-          for (let k = 0; k < 60; k++) clap(this.out, t + Math.random() * 0.05, 0.04, 1000 + Math.random() * 2000);
-        } else {
-          choir(this.out, t, d * 0.92, note, m.vowel);
-          drum(this.out, t);
-        }
-        t += d;
+    // les notes sont créées juste avant d'être jouées (et non toutes d'un coup)
+    const seq = [];
+    for (let r = 0; r < reps; r++) for (const [note, len] of m.notes) { seq.push([t, note, len * beat]); t += len * beat; }
+    let k = 0;
+    const pump = () => {
+      if (this.asleep || !ctx) return;
+      const horizon = ctx.currentTime + 0.4;
+      while (k < seq.length && seq[k][0] < horizon) {
+        const [tt, note, d] = seq[k++];
+        const at = Math.max(tt, ctx.currentTime + 0.02);
+        if (m.claps) clapBurst(this.out, at);
+        else { choir(this.out, at, d * 0.92, note, m.vowel); drum(this.out, at); }
       }
-    }
+      if (k < seq.length) setTimeout(pump, 150);
+    };
+    pump();
     return total;
   }
 }
 
-function clap(dest, t, gain, freq) {
-  const src = ctx.createBufferSource();
-  src.buffer = noise();
-  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.5;
-  const g = ctx.createGain(); g.gain.value = 0;
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
-  src.connect(f).connect(g).connect(dest);
-  src.start(t, Math.random() * 3, 0.1);
+// Applaudissements pré-calculés (une fois) : bruits filtrés en JS, 3 s en boucle
+let applauseB = null, burstB = null;
+function clapsInto(buf, n, spread, gmin, gmax) {
+  const sr = buf.sampleRate, len = Math.floor(0.07 * sr);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++) {
+      // passe-bande (biquad RBJ) sur un bruit blanc avec enveloppe percussive
+      const f = 1000 + Math.random() * 2000, w = 2 * Math.PI * f / sr, al = Math.sin(w) / 3;
+      const a0 = 1 + al, b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w) / a0, a2 = (1 - al) / a0;
+      const g = (gmin + Math.random() * (gmax - gmin)) * 0.2; // niveau calé sur les anciens claps (bruit rose)
+      const at = Math.floor(Math.random() * spread * sr);
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      for (let s = 0; s < len; s++) {
+        const env = s < 0.003 * sr ? s / (0.003 * sr) : Math.exp(-(s - 0.003 * sr) / (0.008 * sr));
+        const x = (Math.random() * 2 - 1) * env;
+        const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x; y2 = y1; y1 = y;
+        d[(at + s) % d.length] += y * g;
+      }
+    }
+  }
+  return buf;
+}
+function applauseBuf() {
+  if (!applauseB) applauseB = clapsInto(ctx.createBuffer(2, ctx.sampleRate * 3, ctx.sampleRate), 120, 3, 0.05, 0.11);
+  return applauseB;
+}
+function burstBuf() {
+  if (!burstB) burstB = clapsInto(ctx.createBuffer(2, Math.floor(ctx.sampleRate * 0.15), ctx.sampleRate), 60, 0.05, 0.04, 0.04);
+  return burstB;
+}
+function clapBurst(dest, t) {
+  const s = ctx.createBufferSource(); s.buffer = burstBuf(); s.playbackRate.value = 0.96 + Math.random() * 0.08;
+  s.connect(dest); s.start(t);
 }
 
 const VOWELS = { a: [800, 1150, 2900], o: [450, 800, 2830], e: [400, 1600, 2700] };
@@ -225,7 +303,7 @@ function choir(dest, t, dur, midi, vowel = 'a') {
     bp.connect(g).connect(out);
     return bp;
   });
-  const voices = 9;
+  const voices = 6;
   for (let v = 0; v < voices; v++) {
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
@@ -246,8 +324,8 @@ function choir(dest, t, dur, midi, vowel = 'a') {
   const ng = ctx.createGain(); ng.gain.value = 0.6;
   ns.connect(nf).connect(ng).connect(out); ns.start(t, Math.random() * 3, dur + 0.3);
   out.gain.setValueAtTime(0, t);
-  out.gain.linearRampToValueAtTime(0.05, t + 0.08);
-  out.gain.setValueAtTime(0.05, t + dur * 0.75);
+  out.gain.linearRampToValueAtTime(0.06, t + 0.08);
+  out.gain.setValueAtTime(0.06, t + dur * 0.75);
   out.gain.linearRampToValueAtTime(0, t + dur + 0.2);
   out.connect(dest);
 }

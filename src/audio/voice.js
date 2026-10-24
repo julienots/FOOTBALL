@@ -104,6 +104,7 @@ class VoiceEngine {
     this.seq = (this.seq || 0) + 1;
     this.speaking = false;
     this.current = null;
+    busGain('stadium', 1, 0.4); // la foule ne reste pas baissée après une phrase coupée
   }
 
   // Lance la synthèse neuronale dès la mise en file (l'audio est prêt plus vite)

@@ -69,7 +69,14 @@ export class RacingChannel {
 
   leave() {
     this.visible = false;
-    if (this.engineSnd) this.engineSnd.out.gain.setTargetAtTime(0, audioCtx().currentTime, 0.1);
+    if (this.engineSnd) {
+      // oscillateurs coupés pour de bon (ils tournaient en silence en permanence)
+      const snd = this.engineSnd, ctx = audioCtx();
+      this.engineSnd = null;
+      snd.out.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+      snd.oscs.forEach(({ o }) => { try { o.stop(ctx.currentTime + 0.6); } catch (e) { /* déjà arrêté */ } });
+      setTimeout(() => snd.out.disconnect(), 800);
+    }
     if (this.crowd) this.crowd.fadeOut();
     this.ads.close(); voice.stop();
     this.tower.classList.add('hidden');
